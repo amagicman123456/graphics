@@ -3,6 +3,8 @@ ctrl+alt+s, select github, and log in for computer
 to save changes look on the left bar under project where it says commit
 and click commit and push
 
-if you changed any files remotely
+btw a remote project url is just the url of the github repository you want to update to
+
+and if you changed any files remotely
 then press ctrl+0t, click "merge incoming changes into the current branch", and select OK
 and wow
