@@ -1,0 +1,62 @@
+in calculating whether the line hits the sphere:
+if(square(dot_product(ux, uy, uz, circle_x, circle_y, circle_z)) - circle_x * circle_x - circle_y * circle_y - circle_z * circle_z + radius * radius < 0) framebuf[j * width + i] = RGB(255, 0, 0);
+else framebuf[j * width + i] = RGB(0, 0, 255);
+
+stuff:
+point c1(-150, 100, 2000), c2(150, 100, 2000), c3(150, -100, 2000);
+vector a = c2 - c1, b = c3 - c1, c = cross_product(a, b);
+ax + by + cz = k
+double k = c.x * a.x + c.y * a.y + c.z * a.z;
+
+earlier testing:
+double x = ux * t;
+double y = uy * t;
+double z = uz * t;
+std::cout << "hello " << x << '\n';
+if(x < -250 || x > 250) framebuf[j * width + i] = RGB(255, 0, 0);
+else framebuf[j * width + i] = RGB(0, 0, 255);
+
+to calculate whether a point is in a triangle:
+
+auto sign = [&](point p1, point p2, point p3) -> double{
+    return (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y);
+};
+double d1 = sign(intersection, c1, c2),
+       d2 = sign(intersection, c2, c3),
+       d3 = sign(intersection, c3, c1);
+bool neg = d1 < 0 || d2 < 0 || d3 < 0,
+     pos = d1 > 0 || d2 > 0 || d3 > 0;
+if(!(neg && pos)) framebuf[j * width + i] = RGB(0, 0, 255);
+else framebuf[j * width + i] = RGB(255, 0, 0);
+                *
+
+auto point_in_triangle = [&](point p, point a, point b, point c) -> bool{
+    if(c.y == a.y){
+        point temp = c;
+        c = b;
+        b = temp;
+    }
+    double s1 = c.y - a.y,
+           s2 = c.x - a.x,
+           s3 = b.y - a.y,
+           s4 = p.y - a.y;
+    double w1 = (a.x * s1 + s4 * s2 - p.x * s1) / (s3 * s2 - (b.x - a.x) * s1),
+           w2 = (s4 - w1 * s3) / s1;
+    return w1 >= 0 && w2 >= 0 && (w1 + w2) <= 1;
+};
+
+in windowprocessmessages (i forgot what this is supposed to do):
+case WM_GETMINMAXINFO:{
+    LPMINMAXINFO e = (LPMINMAXINFO)l;
+    //e->ptMinTrackSize.x = 7;
+    //e->ptMinTrackSize.y = 30;
+
+    //e->ptMinTrackSize.x = 17;
+    //e->ptMinTrackSize.y = 40;
+    break;
+}
+
+in main function (height of the window testing):
+//int a = width + 2, b = height + 29;
+//int a = width + 2, b = height + 25;
+(its supposed to be: int a = width + 16, b = height + 39;)
