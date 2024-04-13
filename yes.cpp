@@ -55,7 +55,9 @@ std::function<void()> render =
             double magnitude = sqrt(ux * ux + uy * uy + z_sq);
             ux /= magnitude, uy /= magnitude, uz /= magnitude;
             double circle_x = 100, circle_y = 41.5, circle_z = 2000, radius = sqrt(100000);
-            bool hit_sphere = square(dot_product(ux, uy, uz, circle_x, circle_y, circle_z)) - circle_x * circle_x - circle_y * circle_y - circle_z * circle_z + radius * radius >= 0;
+            double determinant = square(dot_product(ux, uy, uz, circle_x, circle_y, circle_z)) - circle_x * circle_x - circle_y * circle_y - circle_z * circle_z + radius * radius;
+            bool hit_sphere = determinant >= 0;
+            double distance = 
 
             #define TRI
             //point c1(-250, 100, 2000), c2(250, 100, 2000), c3(250, -100, 2000);
