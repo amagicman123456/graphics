@@ -48,7 +48,7 @@ struct sphere{
     sphere(double r, point c) : radius(r), center(c){}
     bool hit(vector u, double& distance){
         double magnitude = sqrt(u.x * u.x + u.y * u.y + u.z * u.z);
-        ux /= magnitude, uy /= magnitude, uz /= magnitude;
+        u.x /= magnitude, u.y /= magnitude, u.z /= magnitude;
         double dot = dot_product(u.x, u.y, u.z, center.x, center.y, center.z);
         double determinant = square(dot) - center.x * center.x - center.y * center.y - center.z * center.z + radius * radius;
         distance = -dot - sqrt(determinant);
@@ -59,7 +59,7 @@ struct polygon{
     std::vector<point> points{};
     polygon(auto... l) try{
         if(sizeof...(l) < 3) throw;
-        points = {l..};
+        points = {l...};
         a = points[1] - points[0], b = points[2] - points[0], c = cross_product(a, b);
         k = c.x * points[0].x + c.y * points[1].y + c.z * points[2].z;
     }catch(...){std::cout << "error: nunber of points to polygon's constructor must be greater than two\n";}
