@@ -1,4 +1,3 @@
-//testing123
 #include <windows.h>
 #include <functional>
 #include <cmath>
