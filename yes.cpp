@@ -3,6 +3,7 @@
 #include <cmath>
 #include <iostream>
 #include <process.h>
+#include <vector>
 #define likely(x) __builtin_expect(!!(x), 1)
 #define unlikely(x) __builtin_expect(!!(x), 0)
 int f = 0;
@@ -41,25 +42,111 @@ struct point{
     }
 };
 typedef point vector;
+struct sphere{
+    double radius;
+    point center;
+    sphere(double r, point c) : radius(r), center(c){}
+    bool hit(vector u, double& distance){
+        double magnitude = sqrt(u.x * u.x + u.y * u.y + u.z * u.z);
+        ux /= magnitude, uy /= magnitude, uz /= magnitude;
+        double dot = dot_product(u.x, u.y, u.z, center.x, center.y, center.z);
+        double determinant = square(dot) - center.x * center.x - center.y * center.y - center.z * center.z + radius * radius;
+        distance = -dot - sqrt(determinant);
+        return determinant >= 0;
+    }
+};
+struct polygon{
+    std::vector<point> points{};
+    polygon(auto... l) try{
+        if(sizeof...(l) < 3) throw;
+        points = {l..};
+        a = points[1] - points[0], b = points[2] - points[0], c = cross_product(a, b);
+        k = c.x * points[0].x + c.y * points[1].y + c.z * points[2].z;
+    }catch(...){std::cout << "error: nunber of points to polygon's constructor must be greater than two\n";}
+    bool hit(vector u, double& distance){
+        double e = u.x * c.x + u.y * c.y + u.z * c.z;
+        double t = k / e;
+        if(!e || (uz * t < 0)) return false;
+        point intersection(u.x * t, u.y * t, u.z * t);
+        distance = sqrt(intersection.x * intersection.x + intersection.y * intersection.y + intersection.z * intersection.z);
+        double greatest = greater(greater(c1.z, c2.z), c3.z);
+        auto stretch = [&greatest](point& p){
+            double factor = greatest / p.z;
+            p.x *= factor;
+            p.y *= factor;
+            p.z = greatest;
+        };
+        for(point& i : points) stretch(i);
+        stretch(intersection);
+
+        #define tri_specialization
+        #define first_algorithm
+
+        #ifdef tri_specialization
+        if(n == 3){
+            #ifdef first_algorithm
+                if(points[2].y == points[0].y){
+                    point temp = points[2];
+                    points[2] = points[1];
+                    points[1] = temp;
+                }
+                double s1 = points[2].y - points[0].y,
+                       s2 = points[2].x - points[0].x,
+                       s3 = points[1].y - points[0].y,
+                       s4 = p.y - points[0].y;
+                double w1 = (points[0].x * s1 + s4 * s2 - p.x * s1) / (s3 * s2 - (polygon[1].x - polygon[0].x) * s1),
+                       w2 = (s4 - w1 * s3) / s1;
+                return w1 >= 0 && w2 >= 0 && (w1 + w2) <= 1;
+            #else
+                auto sign = [&](point p1, point p2, point p3) -> double{
+                    return (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y);
+                };
+                double d1 = sign(p, points[0], points[1]),
+                       d2 = sign(p, points[1], points[2]),
+                       d3 = sign(p, points[2], points[0]);
+                bool neg = d1 < 0 || d2 < 0 || d3 < 0,
+                     pos = d1 > 0 || d2 > 0 || d3 > 0;
+                return !(neg && pos);
+            #endif
+        }
+        #endif
+        bool inside = false;
+        for(int i = 0, j = n - 1; i < n; j = i++)
+            if(((points[i].y > p.y) != (points[j].y > p.y)) &&
+                (p.x < (points[j].x - points[i].x) * (p.y - points[i].y) / (points[j].y - points[i].y) + points[i].x))
+                    inside = !inside;
+                    return inside;
+    }
+private:
+    vector a, b, c;
+    double k;
+};
 vector cross_product(vector a, vector b){
     return vector(a.y * b.z - b.y * a.z, a.z * b.x - b.z * a.x, a.x * b.y - b.x * a.y);
 }
 std::function<void()> render =
 [&](){
     ++f;
-    double z = width / (2 * tan(horizontal_fov / 2)), z_sq = z * z;
+    double z = width / (2 * tan(horizontal_fov / 2)); //z_sq = z * z;
     for(int j = height - 1; j >= 0; --j){
         for(int i = 0; i < width; ++i){
-            double ux = -width / 2.0 + i, uy = height / 2.0 - j, uz = z;
-
+            //double ux = -width / 2.0 + i, uy = height / 2.0 - j, uz = z;
+            vector v(-width / 2.0 + i, height / 2.0 - j, z);
+            /*
             double magnitude = sqrt(ux * ux + uy * uy + z_sq);
             ux /= magnitude, uy /= magnitude, uz /= magnitude;
             double circle_x = 100, circle_y = 41.5, circle_z = 2000, radius = sqrt(100000);
-            double determinant = square(dot_product(ux, uy, uz, circle_x, circle_y, circle_z)) - circle_x * circle_x - circle_y * circle_y - circle_z * circle_z + radius * radius;
+            double dot = dot_product(ux, uy, uz, circle_x, circle_y, circle_z);
+            double determinant = square(dot) - circle_x * circle_x - circle_y * circle_y - circle_z * circle_z + radius * radius;
             bool hit_sphere = determinant >= 0;
-            double distance = 
-
+            double distance_to_sphere = -dot - sqrt(determinant);
+            */
+            sphere s(sqrt(100000), point(100, 41.5, 2000));
+            double distance_to_sphere = 0;
+            bool hit_sphere = s.hit(v, std::ref(distance_to_sphere));
+            
             #define TRI
+            /*
             //point c1(-250, 100, 2000), c2(250, 100, 2000), c3(250, -100, 2000);
             //point c1(-100, 150, 2000), c2(250, 100, 2000), c3(250, -150, 2000);
             point c1(-250, -300, 2400), c2(250, 200, 1500), c3(350, -100, 1000);
@@ -74,7 +161,7 @@ std::function<void()> render =
             if(!e || (uz * t < 0)) framebuf[j * width + i] = RGB(255, 0, 0);
             else{
                 point intersection(ux * t, uy * t, uz * t);
-
+                double distance_to_plane = sqrt(intersection.x * intersection.x + intersection.y * intersection.y + intersection.z * intersection.z);
                 double greatest = greater(greater(c1.z, c2.z), c3.z);
                 auto stretch = [&greatest](point& p){
                     double factor = greatest / p.z;
@@ -132,14 +219,35 @@ std::function<void()> render =
                             inside = !inside;
                     return inside;
                 };
+                /*
                 #ifdef TRI
-                    if(hit_sphere || is_inside(intersection, c1, c2, c3)) framebuf[j * width + i] = RGB(0, 0, 255);
+                    bool hit_triangle = is_inside(intersection, c1, c2, c3);
+                    if(hit_sphere || hit_triangle) framebuf[j * width + i] = RGB(0, 0, 255);
                     else framebuf[j * width + i] = RGB(255, 0, 0);
                 #endif
                 #ifdef QUAD
-                    if(hit_sphere || is_inside(intersection, c1, c2, c3, c4)) framebuf[j * width + i] = RGB(0, 0, 255);
+                    bool hit_quadrilateral = is_inside(intersection, c1, c2, c3, c4);
+                    if(hit_sphere || hit_quadrilateral) framebuf[j * width + i] = RGB(0, 0, 255);
                     else framebuf[j * width + i] = RGB(255, 0, 0);
                 #endif
+                *//*
+                bool hit_polygon = is_inside(intersection, c1, c2, c3
+                #ifdef QUAD
+                    ,c4
+                #endif
+                );
+                */
+                polygon p(point(-250, -300, 2400), point(250, 200, 1500), point(350, -100, 1000)
+                #ifdef QUAD
+                    , point(-250, -100, 2000)
+                );
+                double distance_to_polygon;
+                bool hit_polygon = p.hit(v, std::ref(distance_to_polygon));
+                // for multiple objects create a list of objects the ray hit
+                // with either inheritance or std::any or smth
+                // and find which of the distances is least
+                if(hit_sphere || hit_polygon) framebuf[j * width + i] = RGB(0, 0, 255);
+                else framebuf[j * width + i] = RGB(255, 0, 0);
             }
         }
     }
