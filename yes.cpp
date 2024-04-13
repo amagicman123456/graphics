@@ -240,6 +240,7 @@ std::function<void()> render =
                 polygon p(point(-250, -300, 2400), point(250, 200, 1500), point(350, -100, 1000)
                 #ifdef QUAD
                     , point(-250, -100, 2000)
+                #endif
                 );
                 double distance_to_polygon;
                 bool hit_polygon = p.hit(v, std::ref(distance_to_polygon));
