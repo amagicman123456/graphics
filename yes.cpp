@@ -153,26 +153,48 @@ std::function<void()> render =
         for(int i = 0; i < width; ++i){
             vector v(-width / 2.0 + i, height / 2.0 - j, z);
 
-            std::pair<bool, double> hit_s = s.hit(v);
-            bool hit_sphere = hit_s.first;
+            //std::pair<bool, double> hit_s = s.hit(v);
+            //bool hit_sphere = hit_s.first;
             //double distance_to_sphere = hit_s.second;
 
-            std::pair<bool, double> hit_p = p.hit(v);
-            bool hit_polygon = hit_p.first;
+            //std::pair<bool, double> hit_p = p.hit(v);
+            //bool hit_polygon = hit_p.first;
             //double distance_to_polygon = hit_p.second;
 
             // for multiple objects create a list of objects the ray hit
             // with either inheritance or std::any or smth
             // and find which of the distances is least
-
-            object* o = *std::min_element(world.begin(), world.end(), [](object* a, object *b){
+            bool hit_nothing = true;
+            object* o = *std::min_element(world.begin(), world.end(), [&hit_nothing](object* a, object *b){
                 // bagel supremacy
                 std::pair<bool, double> hit_a = a.hit(v), hit_b = b.hit(v);
-                
+                /*
+                if(unlikely(hit_a.first && hit_b.first)){
+                    hit_nothing = false;
+                    return hit_a.second < hit_b.second;
+                }
+                if(unlikely(hit_a.first)){
+                    hit_nothing = false;
+                    return true;
+                }
+                //if(unlikely(hit_b.first)) hit_nothing = false;
+                hit_nothing = !hit_b.first;
+                return false;
+                */
+                if(unlikely(hit_a.first)){
+                    hit_nothing = false;
+                    if(unlikely(hit_b.first)) return hit_a.second < hit_b.second;
+                    return true;
+                }
+                //if(unlikely(hit_b.first)) hit_nothing = false;
+                hit_nothing = !hit_b.first;
+                return false;
             });
+            if(likely(hit_nothing)) framebuf[j * width + i] = RGB(255, 0, 0);
+            else framebuf[j * width + i] = o->color;
 
-            if(unlikely(hit_sphere || hit_polygon)) framebuf[j * width + i] = RGB(0, 0, 255);
-            else framebuf[j * width + i] = RGB(255, 0, 0);
+            //if(unlikely(hit_sphere || hit_polygon)) framebuf[j * width + i] = RGB(0, 0, 255);
+            //else framebuf[j * width + i] = RGB(255, 0, 0);
         }
     }
 }
