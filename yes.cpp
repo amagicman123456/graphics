@@ -46,6 +46,7 @@ struct point{
 typedef uint32_t color;
 struct object{
     color clr;
+    virtual std::pair<bool, double> hit() = 0;
 };
 typedef point vector;
 struct sphere : object{
@@ -53,7 +54,7 @@ struct sphere : object{
     point center;
     color clr;
     sphere(color cl, double r, point c) : radius(r), center(c), clr(cl){}
-    std::pair<bool, double> hit(vector u){
+    std::pair<bool, double> hit(vector u) override{
         double magnitude = sqrt(u.x * u.x + u.y * u.y + u.z * u.z);
         u.x /= magnitude, u.y /= magnitude, u.z /= magnitude;
         double dot = dot_product(u.x, u.y, u.z, center.x, center.y, center.z);
@@ -79,7 +80,7 @@ struct polygon : object{
         p.y *= factor;
         p.z = greatest;
     };
-    std::pair<bool, double> hit(vector u){
+    std::pair<bool, double> hit(vector u) override {
         double e = u.x * c.x + u.y * c.y + u.z * c.z;
         double t = k / e;
         if(!e || (u.z * t < 0)) return std::pair<bool, double>(false, 0);
@@ -165,7 +166,9 @@ std::function<void()> render =
             // and find which of the distances is least
 
             object* o = *std::min_element(world.begin(), world.end(), [](object* a, object *b){
-
+                // bagel supremacy
+                std::pair<bool, double> hit_a = a.hit(v), hit_b = b.hit(v);
+                
             });
 
             if(unlikely(hit_sphere || hit_polygon)) framebuf[j * width + i] = RGB(0, 0, 255);
