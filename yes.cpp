@@ -30,6 +30,7 @@ double abs_val(double a){
 double dot_product(double ax, double ay, double az, double bx, double by, double bz){
     return ax * bx + ay * by + az * bz;
 }
+/*
 double inv_sqrt(double number){
     int64_t i;
     double x2, f;
@@ -43,6 +44,7 @@ double inv_sqrt(double number){
 
     return f;
 }
+*/
 struct point{
     double x, y, z;
     point() : x(0), y(0), z(0){}
@@ -83,7 +85,9 @@ struct sphere : public object{
         double magnitude_squared = u.x * u.x + u.y * u.y + u.z * u.z;
         double dot = dot_product(u.x, u.y, u.z, center.x, center.y, center.z);
         double determinant = dot * dot - magnitude_squared * (center.x * center.x + center.y * center.y + center.z * center.z - radius * radius);
-        return std::pair<bool, double>(determinant >= 0, square((-dot - sqrt(determinant)) / magnitude_squared));
+        // if determinant < 0 you can't sqrt it
+        if(determinant < 0) return std::pair<bool, double>(false, 0);
+        return std::pair<bool, double>(true, (-dot - sqrt(determinant)) / magnitude_squared);
     }
 };
 vector cross_product(vector a, vector b){
@@ -109,9 +113,10 @@ struct polygon : public object{
     std::pair<bool, double> hit(vector u) override {
         double e = u.x * c.x + u.y * c.y + u.z * c.z;
         double t = k / e;
-        if(!e || (u.z * t < 0)) return std::pair<bool, double>(false, 0);
+        if(likely(!e || (u.z * t < 0))) return std::pair<bool, double>(false, 0);
         point intersection(u.x * t, u.y * t, u.z * t);
-        double distance = intersection.x * intersection.x + intersection.y * intersection.y + intersection.z * intersection.z;
+
+        double distance = sqrt(intersection.x * intersection.x + intersection.y * intersection.y + intersection.z * intersection.z);
         double greatest = greater(greater(points[0].z, points[1].z), points[2].z);
 
         for(point& i : points) stretch(greatest, i);
@@ -143,8 +148,9 @@ struct polygon : public object{
                        d2 = sign(p, points[1], points[2]),
                        d3 = sign(p, points[2], points[0]);
                 bool neg = d1 < 0 || d2 < 0 || d3 < 0,
-                     pos = d1 > 0 || d2 > 0 || d3 > 0;
-                return std::pair<bool, double>(!(neg && pos), distance);
+                     pos = d1 > 0 || d2 > 0 || d3 > 0,
+                     ret = !(neg && pos);
+                return std::pair<bool, double>(ret, distance);
             #endif
         }
         #endif
@@ -224,12 +230,10 @@ std::function<void()> render =
                 if(unlikely(hit_polygon)){
                     if(hit_s.second < hit_p.second) framebuf[j * width + i] = RGB(0, 255, 0);
                     else framebuf[j * width + i] = RGB(0, 0, 255);
-                    continue;
                 }
-                framebuf[j * width + i] = RGB(0, 255, 0);
-                continue;
+                else framebuf[j * width + i] = RGB(0, 255, 0);
             }
-            if(unlikely(hit_polygon)) framebuf[j * width + i] = RGB(0, 0, 255);
+            else if(unlikely(hit_polygon)) framebuf[j * width + i] = RGB(0, 0, 255);
             else framebuf[j * width + i] = RGB(255, 0, 0);
 
             //if(unlikely(hit_sphere || hit_polygon)) framebuf[j * width + i] = RGB(0, 0, 255);
