@@ -1,6 +1,7 @@
 #include <windows.h>
 #include <process.h>
 #include <functional>
+#include <algorithm>
 #include <iostream>
 #include <memory>
 #include <vector>
@@ -44,16 +45,17 @@ struct point{
     }
 };
 typedef uint32_t color;
-struct object{
-    color clr;
-    virtual std::pair<bool, double> hit() = 0;
-};
 typedef point vector;
-struct sphere : object{
+struct object{
+    virtual std::pair<bool, double> hit(vector u);
+    virtual void set_color(color c){clr = c;}
+    color clr;
+};
+struct sphere : public object{
     double radius;
     point center;
-    color clr;
-    sphere(color cl, double r, point c) : radius(r), center(c), clr(cl){}
+    sphere(color cl, double r, point c) : radius(r), center(c){set_color(cl);}
+    virtual void set_color(color c){clr = c;}
     std::pair<bool, double> hit(vector u) override{
         double magnitude = sqrt(u.x * u.x + u.y * u.y + u.z * u.z);
         u.x /= magnitude, u.y /= magnitude, u.z /= magnitude;
@@ -65,15 +67,17 @@ struct sphere : object{
 vector cross_product(vector a, vector b){
     return vector(a.y * b.z - b.y * a.z, a.z * b.x - b.z * a.x, a.x * b.y - b.x * a.y);
 }
-struct polygon : object{
+struct polygon : public object{
     std::vector<point> points{};
     color clr;
-    polygon(color cl, auto... l) try : clr(cl){
+    polygon(color cl, auto... l) try /*: clr(cl)*/{
+        set_color(cl);
         if(sizeof...(l) < 3) throw;
         points = {(point(l))...};
         a = points[1] - points[0], b = points[2] - points[0], c = cross_product(a, b);
         k = c.x * points[0].x + c.y * points[1].y + c.z * points[2].z;
     }catch(...){std::cout << "error: number of points to polygon's constructor must be greater than two\n";}
+    virtual void set_color(color c){std::cout << c << '\n', clr = c;}
     void stretch(double& greatest, point& p){
         double factor = greatest / p.z;
         p.x *= factor;
@@ -147,27 +151,28 @@ polygon p(RGB(0, 255, 0), a, b, c
 std::vector<object*> world = {&s, &p};
 std::function<void()> render =
 [&](){
+    //std::cout << world[1]->clr << '\n';
     ++f;
     double z = width / (2 * tan(horizontal_fov / 2));
     for(int j = height - 1; j >= 0; --j){
         for(int i = 0; i < width; ++i){
             vector v(-width / 2.0 + i, height / 2.0 - j, z);
 
-            //std::pair<bool, double> hit_s = s.hit(v);
-            //bool hit_sphere = hit_s.first;
-            //double distance_to_sphere = hit_s.second;
+            std::pair<bool, double> hit_s = s.hit(v);
+            bool hit_sphere = hit_s.first;
+            double distance_to_sphere = hit_s.second;
 
-            //std::pair<bool, double> hit_p = p.hit(v);
-            //bool hit_polygon = hit_p.first;
-            //double distance_to_polygon = hit_p.second;
+            std::pair<bool, double> hit_p = p.hit(v);
+            bool hit_polygon = hit_p.first;
+            double distance_to_polygon = hit_p.second;
 
             // for multiple objects create a list of objects the ray hit
             // with either inheritance or std::any or smth
             // and find which of the distances is least
-            bool hit_nothing = true;
-            object* o = *std::min_element(world.begin(), world.end(), [&hit_nothing](object* a, object *b){
+            //bool hit_nothing = true;
+            //object* o = *std::min_element(world.begin(), world.end(), [&hit_nothing, &v](object* a, object *b){
                 // bagel supremacy
-                std::pair<bool, double> hit_a = a.hit(v), hit_b = b.hit(v);
+                //std::pair<bool, double> hit_a = a->hit(v), hit_b = b->hit(v);
                 /*
                 if(unlikely(hit_a.first && hit_b.first)){
                     hit_nothing = false;
@@ -180,7 +185,7 @@ std::function<void()> render =
                 //if(unlikely(hit_b.first)) hit_nothing = false;
                 hit_nothing = !hit_b.first;
                 return false;
-                */
+                *//*
                 if(unlikely(hit_a.first)){
                     hit_nothing = false;
                     if(unlikely(hit_b.first)) return hit_a.second < hit_b.second;
@@ -190,9 +195,20 @@ std::function<void()> render =
                 hit_nothing = !hit_b.first;
                 return false;
             });
-            if(likely(hit_nothing)) framebuf[j * width + i] = RGB(255, 0, 0);
-            else framebuf[j * width + i] = o->color;
-
+            */
+            //if(likely(hit_nothing)) framebuf[j * width + i] = RGB(255, 0, 0);
+            //else framebuf[j * width + i] = o->clr;
+            if(unlikely(hit_sphere)){
+                if(unlikely(hit_polygon)){
+                    if(distance_to_sphere < distance_to_polygon) framebuf[j * width + i] = RGB(0, 255, 0);
+                    else framebuf[j * width + i] = RGB(0, 0, 255);
+                    continue;
+                }
+                framebuf[j * width + i] = RGB(0, 255, 0);
+                continue;
+            }
+            if(unlikely(hit_polygon)) framebuf[j * width + i] = RGB(0, 0, 255);
+            else framebuf[j * width + i] = RGB(255, 0, 0);
             //if(unlikely(hit_sphere || hit_polygon)) framebuf[j * width + i] = RGB(0, 0, 255);
             //else framebuf[j * width + i] = RGB(255, 0, 0);
         }
