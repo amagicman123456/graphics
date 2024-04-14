@@ -30,6 +30,19 @@ double abs_val(double a){
 double dot_product(double ax, double ay, double az, double bx, double by, double bz){
     return ax * bx + ay * by + az * bz;
 }
+double inv_sqrt(double number){
+    int64_t i;
+    double x2, f;
+
+    x2 = number * 0.5F;
+    f  = number;
+    i  = *(int64_t*)&f;                 // evil bit hacks
+    i  = 0x5fe6eb50c7b537a9 - (i >> 1); // what the heck?
+    f  = *(double*)&i;
+    f  = f * (1.5F - (x2 * f * f));
+
+    return f;
+}
 struct point{
     double x, y, z;
     point() : x(0), y(0), z(0){}
@@ -57,11 +70,20 @@ struct sphere : public object{
     sphere(color cl, double r, point c) : radius(r), center(c){set_color(cl);}
     virtual void set_color(color c){clr = c;}
     std::pair<bool, double> hit(vector u) override{
-        double magnitude = sqrt(u.x * u.x + u.y * u.y + u.z * u.z);
-        u.x /= magnitude, u.y /= magnitude, u.z /= magnitude;
+        //double magnitude = sqrt(u.x * u.x + u.y * u.y + u.z * u.z);
+        //u.x /= magnitude, u.y /= magnitude, u.z /= magnitude;
+        /*
+        double yes = inv_sqrt(u.x * u.x + u.y * u.y + u.z * u.z);
+        u.x *= yes, u.y *= yes, u.z *= yes;
+
         double dot = dot_product(u.x, u.y, u.z, center.x, center.y, center.z);
-        double determinant = square(dot) - center.x * center.x - center.y * center.y - center.z * center.z + radius * radius;
+        double determinant = dot * dot - center.x * center.x - center.y * center.y - center.z * center.z + radius * radius;
         return std::pair<bool, double>(determinant >= 0, -dot - sqrt(determinant));
+        */
+        double magnitude_squared = u.x * u.x + u.y * u.y + u.z * u.z;
+        double dot = dot_product(u.x, u.y, u.z, center.x, center.y, center.z);
+        double determinant = dot * dot - magnitude_squared * (center.x * center.x + center.y * center.y + center.z * center.z - radius * radius);
+        return std::pair<bool, double>(determinant >= 0, square((-dot - sqrt(determinant)) / magnitude_squared));
     }
 };
 vector cross_product(vector a, vector b){
@@ -89,13 +111,13 @@ struct polygon : public object{
         double t = k / e;
         if(!e || (u.z * t < 0)) return std::pair<bool, double>(false, 0);
         point intersection(u.x * t, u.y * t, u.z * t);
-        double distance = sqrt(intersection.x * intersection.x + intersection.y * intersection.y + intersection.z * intersection.z);
+        double distance = intersection.x * intersection.x + intersection.y * intersection.y + intersection.z * intersection.z;
         double greatest = greater(greater(points[0].z, points[1].z), points[2].z);
 
         for(point& i : points) stretch(greatest, i);
         stretch(greatest, intersection);
 
-        #define tri_specialization
+        //#define tri_specialization
         #define first_algorithm
 
         #ifdef tri_specialization
@@ -149,22 +171,21 @@ polygon p(RGB(0, 255, 0), a, b, c
 #endif
 );
 std::vector<object*> world = {&s, &p};
+double z = width / (2 * tan(horizontal_fov / 2));
 std::function<void()> render =
 [&](){
-    //std::cout << world[1]->clr << '\n';
     ++f;
-    double z = width / (2 * tan(horizontal_fov / 2));
     for(int j = height - 1; j >= 0; --j){
         for(int i = 0; i < width; ++i){
             vector v(-width / 2.0 + i, height / 2.0 - j, z);
 
             std::pair<bool, double> hit_s = s.hit(v);
             bool hit_sphere = hit_s.first;
-            double distance_to_sphere = hit_s.second;
+            //double distance_to_sphere = hit_s.second;
 
             std::pair<bool, double> hit_p = p.hit(v);
             bool hit_polygon = hit_p.first;
-            double distance_to_polygon = hit_p.second;
+            //double distance_to_polygon = hit_p.second;
 
             // for multiple objects create a list of objects the ray hit
             // with either inheritance or std::any or smth
@@ -198,9 +219,10 @@ std::function<void()> render =
             */
             //if(likely(hit_nothing)) framebuf[j * width + i] = RGB(255, 0, 0);
             //else framebuf[j * width + i] = o->clr;
+
             if(unlikely(hit_sphere)){
                 if(unlikely(hit_polygon)){
-                    if(distance_to_sphere < distance_to_polygon) framebuf[j * width + i] = RGB(0, 255, 0);
+                    if(hit_s.second < hit_p.second) framebuf[j * width + i] = RGB(0, 255, 0);
                     else framebuf[j * width + i] = RGB(0, 0, 255);
                     continue;
                 }
@@ -209,6 +231,7 @@ std::function<void()> render =
             }
             if(unlikely(hit_polygon)) framebuf[j * width + i] = RGB(0, 0, 255);
             else framebuf[j * width + i] = RGB(255, 0, 0);
+
             //if(unlikely(hit_sphere || hit_polygon)) framebuf[j * width + i] = RGB(0, 0, 255);
             //else framebuf[j * width + i] = RGB(255, 0, 0);
         }
