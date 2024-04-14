@@ -2,9 +2,23 @@ so basically
 ctrl+alt+s, select github, and log in for computer
 to save changes look on the left bar under project where it says commit
 and click commit and push
+or run
+git push https://github.com.amagicman123456/graphics master
+or
+git remote add graphics "https://github.com/amagicman123456/graphics"
+git add <--all or file>
+git push -u graphics master
+
+and password is a token
+generate it by going to https://github.com/settings/tokens/new
+fill everything out, and copy and paste the token
 
 btw a remote project url is just the url of the github repository you want to update to
 
 and if you changed any files remotely
 then press ctrl+0t, click "merge incoming changes into the current branch", and select OK
 and wow
+OR
+run:
+git remote add graphics "https://github.com/amagicman123456/graphics"
+git pull https://github.com/amagicman123456/graphics master
