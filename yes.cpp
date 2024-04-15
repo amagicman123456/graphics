@@ -62,7 +62,7 @@ struct point{
 typedef uint32_t color;
 typedef point vector;
 struct object{
-    virtual std::pair<bool, double> hit(vector u);
+    virtual std::pair<bool, double> hit(vector u) = 0;
     virtual void set_color(color c){clr = c;}
     color clr;
 };
@@ -95,7 +95,6 @@ vector cross_product(vector a, vector b){
 }
 struct polygon : public object{
     std::vector<point> points{};
-    color clr;
     polygon(color cl, auto... l) try /*: clr(cl)*/{
         set_color(cl);
         if(sizeof...(l) < 3) throw;
@@ -103,7 +102,7 @@ struct polygon : public object{
         a = points[1] - points[0], b = points[2] - points[0], c = cross_product(a, b);
         k = c.x * points[0].x + c.y * points[1].y + c.z * points[2].z;
     }catch(...){std::cout << "error: number of points to polygon's constructor must be greater than two\n";}
-    virtual void set_color(color c){std::cout << c << '\n', clr = c;}
+    virtual void set_color(color c){clr = c;}
     void stretch(double& greatest, point& p){
         double factor = greatest / p.z;
         p.x *= factor;
@@ -178,6 +177,33 @@ polygon p(RGB(0, 255, 0), a, b, c
 );
 std::vector<object*> world = {&s, &p};
 double z = width / (2 * tan(horizontal_fov / 2));
+/*
+auto comp = [](bool& hit_nothing, vector v, object* a, object *b){
+    // bagel supremacy
+    std::pair<bool, double> hit_a = a->hit(v), hit_b = b->hit(v);
+    /*
+    if(unlikely(hit_a.first && hit_b.first)){
+        hit_nothing = false;
+        return hit_a.second < hit_b.second;
+    }
+    if(unlikely(hit_a.first)){
+        hit_nothing = false;
+        return true;
+    }
+    //if(unlikely(hit_b.first)) hit_nothing = false;
+    hit_nothing = !hit_b.first;
+    return false;
+    *//*
+    if(unlikely(hit_a.first)){
+        hit_nothing = false;
+        if(unlikely(hit_b.first)) return hit_a.second < hit_b.second;
+        return true;
+    }
+    //if(unlikely(hit_b.first)) hit_nothing = false;
+    hit_nothing = !hit_b.first;
+    return false;
+};
+*/
 std::function<void()> render =
 [&](){
     ++f;
@@ -185,46 +211,40 @@ std::function<void()> render =
         for(int i = 0; i < width; ++i){
             vector v(-width / 2.0 + i, height / 2.0 - j, z);
 
-            std::pair<bool, double> hit_s = s.hit(v);
+            //todo: fix performance issue from calling hit from an object pointer
+            std::pair<bool, double> hit_s = world[0]->hit(v);
             bool hit_sphere = hit_s.first;
             //double distance_to_sphere = hit_s.second;
 
-            std::pair<bool, double> hit_p = p.hit(v);
+            std::pair<bool, double> hit_p = world[1]->hit(v);
             bool hit_polygon = hit_p.first;
             //double distance_to_polygon = hit_p.second;
 
             // for multiple objects create a list of objects the ray hit
             // with either inheritance or std::any or smth
             // and find which of the distances is least
-            //bool hit_nothing = true;
-            //object* o = *std::min_element(world.begin(), world.end(), [&hit_nothing, &v](object* a, object *b){
-                // bagel supremacy
-                //std::pair<bool, double> hit_a = a->hit(v), hit_b = b->hit(v);
-                /*
-                if(unlikely(hit_a.first && hit_b.first)){
-                    hit_nothing = false;
-                    return hit_a.second < hit_b.second;
-                }
+            /*
+            bool hit_nothing = true;
+            object* smallest = world[0];
+
+            for(int w = 1; w < world.size(); ++w){
+                //if(comp(hit_nothing, v, world[i], smallest)) smallest = world[i];
+                std::pair<bool, double> hit_a = world[w]->hit(v), hit_b = smallest->hit(v);
+                //std::pair<bool, double> hit_a(0, 0), hit_b(0, 0);
+
                 if(unlikely(hit_a.first)){
                     hit_nothing = false;
-                    return true;
+                    if(unlikely(hit_b.first)){
+                        if(hit_a.second < hit_b.second)
+                            smallest = world[w];
+                    }
+                    else smallest = world[w];
                 }
-                //if(unlikely(hit_b.first)) hit_nothing = false;
-                hit_nothing = !hit_b.first;
-                return false;
-                *//*
-                if(unlikely(hit_a.first)){
-                    hit_nothing = false;
-                    if(unlikely(hit_b.first)) return hit_a.second < hit_b.second;
-                    return true;
-                }
-                //if(unlikely(hit_b.first)) hit_nothing = false;
-                hit_nothing = !hit_b.first;
-                return false;
-            });
+                else hit_nothing = !hit_b.first;
+            }
+            if(likely(hit_nothing)) framebuf[j * width + i] = RGB(255, 0, 0);
+            else framebuf[j * width + i] = smallest->clr;
             */
-            //if(likely(hit_nothing)) framebuf[j * width + i] = RGB(255, 0, 0);
-            //else framebuf[j * width + i] = o->clr;
 
             if(unlikely(hit_sphere)){
                 if(unlikely(hit_polygon)){
