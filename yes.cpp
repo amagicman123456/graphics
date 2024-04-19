@@ -3,12 +3,13 @@
 #include <functional>
 #include <algorithm>
 #include <iostream>
+#include <atomic>
 #include <memory>
 #include <vector>
 #include <cmath>
 #define likely(x) __builtin_expect(!!(x), 1)
 #define unlikely(x) __builtin_expect(!!(x), 0)
-int f = 0;
+std::atomic<int> f(0);
 void fps(void*){
     while(1){
         Sleep(1000);
@@ -109,7 +110,7 @@ struct polygon : public object{
         p.y *= factor;
         p.z = greatest;
     };
-    std::pair<bool, double> hit(vector u) override {
+    std::pair<bool, double> hit(vector u) override{
         double e = u.x * c.x + u.y * c.y + u.z * c.z;
         double t = k / e;
         if(likely(!e || (u.z * t < 0))) return std::pair<bool, double>(false, 0);
@@ -175,7 +176,7 @@ polygon p(RGB(0, 255, 0), a, b, c
     , d
 #endif
 );
-std::vector<object*> world = {&s, &p};
+std::vector<object*> world = {&p, &s};
 double z = width / (2 * tan(horizontal_fov / 2));
 /*
 auto comp = [](bool& hit_nothing, vector v, object* a, object *b){
@@ -204,22 +205,30 @@ auto comp = [](bool& hit_nothing, vector v, object* a, object *b){
     return false;
 };
 */
+#include <chrono>
+using namespace std::chrono;
 std::function<void()> render =
-[&](){
+[&f](){
     ++f;
     for(int j = height - 1; j >= 0; --j){
         for(int i = 0; i < width; ++i){
             vector v(-width / 2.0 + i, height / 2.0 - j, z);
 
-            //todo: fix performance issue from calling hit from an object pointer
-            std::pair<bool, double> hit_s = world[0]->hit(v);
-            bool hit_sphere = hit_s.first;
+            //use x86_64-w64-mingw32-g++ for better performance
+            //auto start = high_resolution_clock::now();
+
+            //std::pair<bool, double> hit_s = (world[0])->hit(v);
+            //bool hit_sphere = hit_s.first;
             //double distance_to_sphere = hit_s.second;
 
-            std::pair<bool, double> hit_p = world[1]->hit(v);
-            bool hit_polygon = hit_p.first;
+            //std::pair<bool, double> hit_p = (world[1])->hit(v);
+            //bool hit_polygon = hit_p.first;
             //double distance_to_polygon = hit_p.second;
 
+            //auto stop = high_resolution_clock::now();
+            //duration<double, std::milli> time_double = stop - start;
+            //if(time_double.count()) std::cout << "count: " << time_double.count() << '\n';
+            //std::cout << "count: " << time_double.count() << '\n';
             // for multiple objects create a list of objects the ray hit
             // with either inheritance or std::any or smth
             // and find which of the distances is least
@@ -245,7 +254,28 @@ std::function<void()> render =
             if(likely(hit_nothing)) framebuf[j * width + i] = RGB(255, 0, 0);
             else framebuf[j * width + i] = smallest->clr;
             */
+            bool hit_nothing = true, small_change = false;
+            object* smallest = world[0];
+            std::pair<bool, double> hit_b = smallest->hit(v);
+            for(int w = 1; w < world.size(); ++w){
+                //if(comp(hit_nothing, v, world[i], smallest)) smallest = world[i];
+                std::pair<bool, double> hit_a = world[w]->hit(v);
+                if(small_change) hit_b = smallest->hit(v), small_change = false;
+                //std::pair<bool, double> hit_a(0, 0), hit_b(0, 0);
 
+                if(unlikely(hit_a.first)){
+                    hit_nothing = false;
+                    if(unlikely(hit_b.first)){
+                        if(hit_a.second < hit_b.second)
+                            smallest = world[w], small_change = true;
+                    }
+                    else smallest = world[w], small_change;
+                }
+                else hit_nothing = !hit_b.first;
+            }
+            if(likely(hit_nothing)) framebuf[j * width + i] = RGB(255, 0, 0);
+            else framebuf[j * width + i] = smallest->clr;
+            /*
             if(unlikely(hit_sphere)){
                 if(unlikely(hit_polygon)){
                     if(hit_s.second < hit_p.second) framebuf[j * width + i] = RGB(0, 255, 0);
@@ -255,7 +285,7 @@ std::function<void()> render =
             }
             else if(unlikely(hit_polygon)) framebuf[j * width + i] = RGB(0, 0, 255);
             else framebuf[j * width + i] = RGB(255, 0, 0);
-
+            */
             //if(unlikely(hit_sphere || hit_polygon)) framebuf[j * width + i] = RGB(0, 0, 255);
             //else framebuf[j * width + i] = RGB(255, 0, 0);
         }

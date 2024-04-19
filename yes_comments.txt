@@ -1,3 +1,6 @@
+compile yes.cpp with:
+x86_64-w64-mingw32-g++ yes.cpp -fconcepts-ts -static -lgdi32 -Ofast -o yes
+
 in calculating whether the line hits the sphere:
 if(square(dot_product(ux, uy, uz, circle_x, circle_y, circle_z)) - circle_x * circle_x - circle_y * circle_y - circle_z * circle_z + radius * radius < 0) framebuf[j * width + i] = RGB(255, 0, 0);
 else framebuf[j * width + i] = RGB(0, 0, 255);
