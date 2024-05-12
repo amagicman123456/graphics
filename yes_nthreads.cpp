@@ -212,10 +212,10 @@ std::function<void()> render =
 
     // todo: use another synchronization technique to make it faster
     //WaitForSingleObject(mutex, INFINITE);
-    //EnterCriticalSection(&cs);
+    EnterCriticalSection(&cs);
     active = 0;
     //ReleaseMutex(mutex);
-    //LeaveCriticalSection(&cs);
+    LeaveCriticalSection(&cs);
 
     threads_done = 0;
 }
