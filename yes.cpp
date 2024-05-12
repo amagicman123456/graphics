@@ -10,11 +10,19 @@
 #define likely(x) __builtin_expect(!!(x), 1)
 #define unlikely(x) __builtin_expect(!!(x), 0)
 std::atomic<int> f(0);
+std::atomic<double> yaw_angle_radians(0);
+std::atomic<double> pitch_angle_radians(0);
+std::atomic<double> roll_angle_radians(0);
 void fps(void*){
     while(1){
         Sleep(1000);
         std::cout << f << '\n';
         f = 0;
+
+        //yaw_angle_radians = yaw_angle_radians ? 0 : 0.175;
+        //yaw_angle_radians = (!yaw_angle_radians) * 0.175;
+        //pitch_angle_radians = (!pitch_angle_radians) * 0.175;
+        roll_angle_radians = (!roll_angle_radians) * 0.175;
     }
 }
 int width = 1200, height = 600, tick_count, *framebuf;
@@ -165,6 +173,17 @@ private:
     vector a, b, c;
     double k;
 };
+/*
+struct doughnut : public object{
+    point center;
+    double inner_radius, outer_radius;
+    donut(point c, double ir, double or) : center(c), inner_radius(ir), outer_radius(or){}
+    virtual void set_color(color c){clr = c;}
+    std::pair<bool, double> hit(vector u) override{
+
+    }
+};
+*/
 sphere s(RGB(0, 0, 255), sqrt(100000), point(100, 41.5, 2000));
 point a(-250, -300, 2400), b(250, 200, 1500), c(350, -100, 1000)
 #ifdef QUAD
@@ -176,7 +195,7 @@ polygon p(RGB(0, 255, 0), a, b, c
     , d
 #endif
 );
-std::vector<object*> world = {&p, &s};
+std::vector<object*> world = {&s, &p};
 double z = width / (2 * tan(horizontal_fov / 2));
 /*
 auto comp = [](bool& hit_nothing, vector v, object* a, object *b){
@@ -212,7 +231,28 @@ std::function<void()> render =
     ++f;
     for(int j = height - 1; j >= 0; --j){
         for(int i = 0; i < width; ++i){
-            vector v(-width / 2.0 + i, height / 2.0 - j, z);
+            double vx = -width / 2.0 + i;
+            double vy = height / 2.0 - j;
+            double vz = z;
+            //todo: fix how yaw produces a roll, pitch produces a yaw, and roll produces a pitch
+            //todo: its very slow
+            if(yaw_angle_radians){
+                double temp = vx;
+                vx = cos(yaw_angle_radians) * vx - sin(yaw_angle_radians) * vy;
+                vy = sin(yaw_angle_radians) * temp + cos(yaw_angle_radians) * vy;
+            }
+            if(pitch_angle_radians){
+                double temp = vx;
+                vx = cos(pitch_angle_radians) * vx + sin(pitch_angle_radians) * vz;
+                vz = -sin(pitch_angle_radians) * temp + cos(pitch_angle_radians) * vz;
+            }
+            if(roll_angle_radians){
+                double temp = vy;
+                vy = cos(roll_angle_radians) * vy - sin(roll_angle_radians) * vz;
+                vz = sin(roll_angle_radians) * temp + cos(roll_angle_radians) * vz;
+            }
+            vector v(vx, vy, vz);
+            //vector v(-width / 2.0 + i, height / 2.0 - j, z);
 
             //use x86_64-w64-mingw32-g++ for better performance
             //auto start = high_resolution_clock::now();
@@ -269,7 +309,7 @@ std::function<void()> render =
                         if(hit_a.second < hit_b.second)
                             smallest = world[w], small_change = true;
                     }
-                    else smallest = world[w], small_change;
+                    else smallest = world[w], small_change = true;
                 }
                 else hit_nothing = !hit_b.first;
             }
