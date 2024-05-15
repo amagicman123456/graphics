@@ -22,7 +22,7 @@ void fps(void*){
         //yaw_angle_radians = yaw_angle_radians ? 0 : 0.175;
         //yaw_angle_radians = (!yaw_angle_radians) * 0.175;
         //pitch_angle_radians = (!pitch_angle_radians) * 0.175;
-        roll_angle_radians = (!roll_angle_radians) * 0.175;
+        roll_angle_radians = (!roll_angle_radians) * 0.35;
     }
 }
 int width = 1200, height = 600, tick_count, *framebuf;
@@ -131,7 +131,7 @@ struct polygon : public object{
         stretch(greatest, intersection);
 
         //#define tri_specialization
-        #define first_algorithm
+        //#define first_algorithm
 
         #ifdef tri_specialization
         if(points.size() == 3){
@@ -237,19 +237,24 @@ std::function<void()> render =
             //todo: fix how yaw produces a roll, pitch produces a yaw, and roll produces a pitch
             //todo: its very slow
             if(yaw_angle_radians){
-                double temp = vx;
-                vx = cos(yaw_angle_radians) * vx - sin(yaw_angle_radians) * vy;
-                vy = sin(yaw_angle_radians) * temp + cos(yaw_angle_radians) * vy;
+                //double temp = vx;
+                //vx = cos(yaw_angle_radians) * vx - sin(yaw_angle_radians) * vy;
+                //vy = sin(yaw_angle_radians) * temp + cos(yaw_angle_radians) * vy;
+                vx -= vz * sin(yaw_angle_radians);
             }
             if(pitch_angle_radians){
-                double temp = vx;
-                vx = cos(pitch_angle_radians) * vx + sin(pitch_angle_radians) * vz;
-                vz = -sin(pitch_angle_radians) * temp + cos(pitch_angle_radians) * vz;
+                //double temp = vx;
+                //vx = cos(pitch_angle_radians) * vx + sin(pitch_angle_radians) * vz;
+                //vz = -sin(pitch_angle_radians) * temp + cos(pitch_angle_radians) * vz;
+                vy += vz * sin(pitch_angle_radians);
             }
             if(roll_angle_radians){
-                double temp = vy;
-                vy = cos(roll_angle_radians) * vy - sin(roll_angle_radians) * vz;
-                vz = sin(roll_angle_radians) * temp + cos(roll_angle_radians) * vz;
+                //double temp = vy;
+                //vy = cos(roll_angle_radians) * vy - sin(roll_angle_radians) * vz;
+                //vz = sin(roll_angle_radians) * temp + cos(roll_angle_radians) * vz;
+                double cos_rar = cos(roll_angle_radians), sin_rar = sin(roll_angle_radians), sin_rar_vx = sin_rar * vx;
+                vx = cos_rar * vx - sin_rar * vy;
+                vy = sin_rar_vx + cos_rar * vy;
             }
             vector v(vx, vy, vz);
             //vector v(-width / 2.0 + i, height / 2.0 - j, z);
