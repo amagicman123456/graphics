@@ -288,8 +288,7 @@ std::function<void()> render =
             double vx = -width / 2.0 + i;
             double vy = height / 2.0 - j;
             double vz = z;
-            //todo: fix how yaw produces a roll, pitch produces a yaw, and roll produces a pitch
-            //todo: its very slow
+            //todo: its kinda slow ngl
             if(yaw_angle_radians){
                 //double temp = vx;
                 //vx = cos(yaw_angle_radians) * vx - sin(yaw_angle_radians) * vy;
