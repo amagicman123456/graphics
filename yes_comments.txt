@@ -59,6 +59,49 @@ case WM_GETMINMAXINFO:{
     break;
 }
 
+in render():
+vector v(-width / 2.0 + i, height / 2.0 - j, z);
+
+use x86_64-w64-mingw32-g++ for better performance
+auto start = high_resolution_clock::now();
+
+std::pair<bool, double> hit_s = (world[0])->hit(v);
+bool hit_sphere = hit_s.first;
+double distance_to_sphere = hit_s.second;
+
+std::pair<bool, double> hit_p = (world[1])->hit(v);
+bool hit_polygon = hit_p.first;
+double distance_to_polygon = hit_p.second;
+
+auto stop = high_resolution_clock::now();
+duration<double, std::milli> time_double = stop - start;
+if(time_double.count()) std::cout << "count: " << time_double.count() << '\n';
+std::cout << "count: " << time_double.count() << '\n';
+for multiple objects create a list of objects the ray hit
+with either inheritance or std::any or smth
+and find which of the distances is least
+
+bool hit_nothing = true;
+object* smallest = world[0];
+
+for(int w = 1; w < world.size(); ++w){
+    //if(comp(hit_nothing, v, world[i], smallest)) smallest = world[i];
+    std::pair<bool, double> hit_a = world[w]->hit(v), hit_b = smallest->hit(v);
+    //std::pair<bool, double> hit_a(0, 0), hit_b(0, 0);
+
+    if(unlikely(hit_a.first)){
+        hit_nothing = false;
+        if(unlikely(hit_b.first)){
+            if(hit_a.second < hit_b.second)
+                smallest = world[w];
+        }
+        else smallest = world[w];
+    }
+    else hit_nothing = !hit_b.first;
+}
+if(likely(hit_nothing)) framebuf[j * width + i] = RGB(255, 0, 0);
+else framebuf[j * width + i] = smallest->clr;
+
 in main function (height of the window testing):
 //int a = width + 2, b = height + 29;
 //int a = width + 2, b = height + 25;
