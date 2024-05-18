@@ -9,3 +9,5 @@ it renders 3d spheres and shapes
 im trying to make a torus rn
 
 but idk wtf im doing
+
+btw yes_cursed.exe is way too cursed
