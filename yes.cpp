@@ -21,8 +21,10 @@ void fps(void*){
 
         //yaw_angle_radians = yaw_angle_radians ? 0 : 0.175;
         //yaw_angle_radians = (!yaw_angle_radians) * 0.175;
+        yaw_angle_radians = yaw_angle_radians + 0.175;
+        //if(yaw_angle_radians > 6.28) yaw_angle_radians = 0;
         //pitch_angle_radians = (!pitch_angle_radians) * 0.175;
-        roll_angle_radians = (!roll_angle_radians) * 0.35;
+        //roll_angle_radians = (!roll_angle_radians) * 0.35;
     }
 }
 int width = 1200, height = 600, tick_count, *framebuf;
@@ -163,7 +165,7 @@ struct polygon : public object{
         }
         #endif
         bool inside = false;
-        for(int i = 0, j = points.size() - 1; i < points.size(); j = i++)
+        for(int i = 0, j = points.size() - 1; i < (int)points.size(); j = i++)
             if(((points[i].y > intersection.y) != (points[j].y > intersection.y)) &&
                 (intersection.x < (points[j].x - points[i].x) * (intersection.y - points[i].y) / (points[j].y - points[i].y) + points[i].x))
                     inside = !inside;
@@ -173,18 +175,69 @@ private:
     vector a, b, c;
     double k;
 };
-/*
+
 struct doughnut : public object{
     point center;
-    double inner_radius, outer_radius;
-    donut(point c, double ir, double or) : center(c), inner_radius(ir), outer_radius(or){}
+    double minor_radius, major_radius;
+    doughnut(color cl, double minor_r, double major_r, point c) : center(c), minor_radius(minor_r), major_radius(major_r), epsilon(major_r * major_r - minor_r * minor_r){set_color(cl);}
     virtual void set_color(color c){clr = c;}
     std::pair<bool, double> hit(vector u) override{
-
+        //std::cout << "hello\n";
+        /*
+        double magnitude_squared = u.x * u.x + u.y * u.y + u.z * u.z;
+        double a = magnitude_squared * magnitude_squared,
+               b = 4 * magnitude_squared * (-center.x * u.x - center.y * u.y - center.z * u.z),
+               c = (-center.x * 2 * (3 * u.x * u.x + u.y * u.y + u.z * u.z) + u.x * 8 * (-center.y * u.y + epsilon * u.z)) + u.x * u.x * (2 * center.y * center.y + epsilon * (2 * epsilon + 2)) + 2 * (-2 * u.x * u.x + major_radius * major_radius + u.y * u.y * (3 * center.y * center.y - 2 * major_radius * major_radius + epsilon * epsilon + epsilon) + u.z * u.z * (center.y * center.y + 3 * epsilon * epsilon + epsilon) + 4 * -center.y * u.y * epsilon * u.z),
+               d = 4 * (-center.x * center.x * center.x * u.x + center.x * center.x * (-center.y * u.y + -center.z * u.z) + -center.x * u.x * (center.y * center.y + epsilon + center.z * center.z) - center.y * center.y * center.y * u.y - 2 * -center.x * u.x * major_radius * major_radius - center.z * u.z * (center.y * center.y + epsilon + center.z * center.z) + -center.y * u.y * (-2 * major_radius * major_radius + epsilon + center.z * center.z)),
+               e = center.x * center.x * center.x * center.x + 2 * center.x * center.x * (center.y * center.y + epsilon + center.z * center.z) + center.y * center.y * center.y * center.y + 2 * center.y * center.y * epsilon - 4 * center.x * center.x * major_radius * major_radius + 2 * center.y * center.y * (center.z * center.z - 2 * major_radius * major_radius) + (epsilon + center.z * center.z) * (epsilon + center.z * center.z);
+        //double a = 4, b = 9, c = 8, d = 2, e = 7;
+        b /= a;
+        c /= a;
+        d /= a;
+        e /= a;
+        //a = 1;
+        */
+        double magnitude = sqrt(u.x * u.x + u.y * u.y + u.z * u.z);
+        double big = 10;
+        u.x /= (magnitude * big), u.y /= (magnitude * big), u.z /= (magnitude * big);
+        double a, b, c, d, e;
+        {
+            double _a = -center.x, _b = u.x, _c = -center.y, _d = u.y, _e = -center.z, _f = u.z;
+            a = _b*_b*_b*_b + 2*_b*_b*_d*_d + _d*_d*_d*_d + _f*_f*_f*_f + 2*_b*_b*_f*_f + 2*_d*_d*_f*_f;
+            b = 4*_a*_b*_b*_b + 4*_a*_b*_d*_d + 4*_b*_b*_c*_d + 4*_c*_d*_d*_d + 4*_e*_f*_f*_f + 4*_a*_b*_f*_f + 4*_e*_b*_b*_f + 4*_c*_d*_f*_f + 4*_e*_d*_d*_f;
+            c = 6*_a*_a*_b*_b + 2*_a*_a*_d*_d + 8*_a*_b*_c*_d + 2*_b*_b*_c*_c + 6*_c*_c*_d*_d * 6*_e*_e*_f*_f + 2*_a*_a*_f*_f + 8*_e*_a*_b*_f + 2*_e*_e*_b*_b + 2*_c*_c*_f*_f + 8*_e*_c*_d*_f + 2*_e*_e*_d*_d + 2*epsilon*_b*_b + 2*epsilon*_d*_d + 2*epsilon*_f*_f - 4*major_radius*major_radius*_b*_b - 4*major_radius*major_radius*_d*_d;
+            d = 4*_a*_a*_a*_b + 4*_a*_a*_c*_d + 4*_a*_b*_c*_c + 4*_c*_c*_c*_d + 4*_e*_e*_e*_f + 4*_e*_e*_a*_b + 4*_e*_c*_c*_f + 4*_e*_e*_c*_d + 4*epsilon*_a*_b + 4*epsilon*_c*_d + 4*_e*epsilon*_f - 8*major_radius*major_radius*_a*_b - 8*major_radius*major_radius*_c*_d;
+            e = _a*_a*_a*_a + 2*_a*_a*_c*_c + _c*_c*_c*_c + _e*_e*_e*_e + epsilon*epsilon + 2*_e*_e*_a*_a + 2*_e*_e*_c*_c + 2*epsilon*_a*_a + 2*epsilon*_c*_c + 2*_e*_e*epsilon - 4*major_radius*major_radius*_a*_a - 4*major_radius*major_radius*_c*_c;
+        }
+        b /= a;
+        c /= a;
+        d /= a;
+        e /= a;
+        //std::cout << a << ' ' << b << ' ' << c << ' ' << d << ' ' << e << ' ' << '\n';
+        double discriminant = 256 * e * e * e - 192 * b * d * e * e - 128 * c * c * e * e + 144 * c * d * d * e - 27 * d * d * d *d + 144 * b * b * c * e * e - 6 * b * b * d * d * e - 80 * b * c * c * d * e + 18 * b * c * d * d * d + 16 * c * c * c * c * e - 4 * c * c * c * d * d - 27 * b * b * b * b * e * e + 18 * b * b * b * c * d * e - 4 * b * b * b * d * d * d - 4 * b * b * c * c * c * e + b * b * c * c * d * d;
+        //return std::pair<bool, double>(true, 100);
+        double p = 8 * c - 3 * b * b;
+        double g = 64 * e - 16 * c * c + 16 * b * b * c - 16 * b * d - 3 * b * b * b * b;
+        if(discriminant < 0) return std::pair<bool, double>(true, 100);
+        if(!discriminant) return std::pair<bool, double>(!(!g && p > 0 && b * b * b + 8 * d - 4 * b * c), 100);
+        //if(discriminant > 0)
+        //return std::pair<bool, double>(!(p > 0 || g > 0), 100);
+        return std::pair<bool, double>(p < 0 && g < 0, 100);
+        //u -= center;
+        //alpha = u.x * u.x + u.y * u.y + u.z * u.z;
+        //double a = alpha * alpha, b = 2 * (alpha * epsilon - 2 * major_radius * (/* using center instead of u here produces funny pattern */ u.x * u.x + u.y * u.y)), c = epsilon * epsilon,
+        //       discriminant = b * b - 4 * a * c;
+        //if(discriminant < 0){return std::pair<bool, double>(false, 0);}
+        //double l = discriminant / (2 * a);
+        //if(l < b){return std::pair<bool, double>(false, 0);}
+        //return std::pair<bool, double>(true, 0);
     }
+private:
+    double /*alpha,*/ epsilon;
 };
-*/
+
 sphere s(RGB(0, 0, 255), sqrt(100000), point(100, 41.5, 2000));
+doughnut d(RGB(0, 255, 0), 200, 300, point(100, 100, 5000));
 point a(-250, -300, 2400), b(250, 200, 1500), c(350, -100, 1000)
 #ifdef QUAD
     , d(-250, -100, 2000)
@@ -195,25 +248,25 @@ polygon p(RGB(0, 255, 0), a, b, c
     , d
 #endif
 );
-std::vector<object*> world = {&s, &p};
+std::vector<object*> world = {&s, &p, &d};
 double z = width / (2 * tan(horizontal_fov / 2));
 /*
 auto comp = [](bool& hit_nothing, vector v, object* a, object *b){
     // bagel supremacy
     std::pair<bool, double> hit_a = a->hit(v), hit_b = b->hit(v);
-    /*
-    if(unlikely(hit_a.first && hit_b.first)){
-        hit_nothing = false;
-        return hit_a.second < hit_b.second;
-    }
-    if(unlikely(hit_a.first)){
-        hit_nothing = false;
-        return true;
-    }
-    //if(unlikely(hit_b.first)) hit_nothing = false;
-    hit_nothing = !hit_b.first;
-    return false;
-    *//*
+
+    //if(unlikely(hit_a.first && hit_b.first)){
+    //    hit_nothing = false;
+    //    return hit_a.second < hit_b.second;
+    //}
+    //if(unlikely(hit_a.first)){
+    //    hit_nothing = false;
+    //    return true;
+    //}
+    // //if(unlikely(hit_b.first)) hit_nothing = false;
+    //hit_nothing = !hit_b.first;
+    //return false;
+
     if(unlikely(hit_a.first)){
         hit_nothing = false;
         if(unlikely(hit_b.first)) return hit_a.second < hit_b.second;
@@ -227,7 +280,8 @@ auto comp = [](bool& hit_nothing, vector v, object* a, object *b){
 #include <chrono>
 using namespace std::chrono;
 std::function<void()> render =
-[&f](){
+[/*&f*/](){
+    //todo: use the gpu for calculations
     ++f;
     for(int j = height - 1; j >= 0; --j){
         for(int i = 0; i < width; ++i){
@@ -302,7 +356,7 @@ std::function<void()> render =
             bool hit_nothing = true, small_change = false;
             object* smallest = world[0];
             std::pair<bool, double> hit_b = smallest->hit(v);
-            for(int w = 1; w < world.size(); ++w){
+            for(int w = 1; w < (int)world.size(); ++w){
                 //if(comp(hit_nothing, v, world[i], smallest)) smallest = world[i];
                 std::pair<bool, double> hit_a = world[w]->hit(v);
                 if(small_change) hit_b = smallest->hit(v), small_change = false;
