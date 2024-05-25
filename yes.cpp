@@ -255,6 +255,7 @@ std::function<void()> render =
             bool hit_nothing = true, small_change = false;
             object* smallest = world[0];
             std::pair<bool, double> hit_b = smallest->hit(v);
+            //todo: likely and unlikely might be unnecessary
             for(int w = 1; w < (int)world.size(); ++w){
                 //if(comp(hit_nothing, v, world[i], smallest)) smallest = world[i];
                 std::pair<bool, double> hit_a = world[w]->hit(v);
