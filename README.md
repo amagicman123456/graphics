@@ -19,7 +19,9 @@ btw yes_cursed.exe is way too cursed
 ![image](/images/cursed.PNG)
 
 build with
+
 ```
 x86_64-w64-mingw32-g++ yes.cpp -static -lgdi32 -fconcepts-ts -Ofast -o yes
 ```
+
 </div>
