@@ -41,21 +41,6 @@ double abs_val(double a){
 double dot_product(double ax, double ay, double az, double bx, double by, double bz){
     return ax * bx + ay * by + az * bz;
 }
-/*
-double inv_sqrt(double number){
-    int64_t i;
-    double x2, f;
-
-    x2 = number * 0.5F;
-    f  = number;
-    i  = *(int64_t*)&f;                 // evil bit hacks
-    i  = 0x5fe6eb50c7b537a9 - (i >> 1); // what the heck?
-    f  = *(double*)&i;
-    f  = f * (1.5F - (x2 * f * f));
-
-    return f;
-}
-*/
 struct point{
     double x, y, z;
     point() : x(0), y(0), z(0){}

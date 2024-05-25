@@ -19,6 +19,21 @@ std::cout << "hello " << x << '\n';
 if(x < -250 || x > 250) framebuf[j * width + i] = RGB(255, 0, 0);
 else framebuf[j * width + i] = RGB(0, 0, 255);
 
+above class sphere in global scope:
+double inv_sqrt(double number){
+    int64_t i;
+    double x2, f;
+
+    x2 = number * 0.5F;
+    f  = number;
+    i  = *(int64_t*)&f;                 // evil bit hacks
+    i  = 0x5fe6eb50c7b537a9 - (i >> 1); // what the heck?
+    f  = *(double*)&i;
+    f  = f * (1.5F - (x2 * f * f));
+
+    return f;
+}
+
 in sphere hit() function:
 
 //double magnitude = sqrt(u.x * u.x + u.y * u.y + u.z * u.z);
