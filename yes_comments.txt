@@ -19,7 +19,18 @@ std::cout << "hello " << x << '\n';
 if(x < -250 || x > 250) framebuf[j * width + i] = RGB(255, 0, 0);
 else framebuf[j * width + i] = RGB(0, 0, 255);
 
-to calculate whether a point is in a triangle:
+in sphere hit() function:
+
+//double magnitude = sqrt(u.x * u.x + u.y * u.y + u.z * u.z);
+//u.x /= magnitude, u.y /= magnitude, u.z /= magnitude;
+double yes = inv_sqrt(u.x * u.x + u.y * u.y + u.z * u.z);
+u.x *= yes, u.y *= yes, u.z *= yes;
+
+double dot = dot_product(u.x, u.y, u.z, center.x, center.y, center.z);
+double determinant = dot * dot - center.x * center.x - center.y * center.y - center.z * center.z + radius * radius;
+return std::pair<bool, double>(determinant >= 0, -dot - sqrt(determinant));
+
+in polygon hit() function (to calculate whether a point is in a triangle):
 
 auto sign = [&](point p1, point p2, point p3) -> double{
     return (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y);
@@ -48,6 +59,40 @@ auto point_in_triangle = [&](point p, point a, point b, point c) -> bool{
     return w1 >= 0 && w2 >= 0 && (w1 + w2) <= 1;
 };
 
+in donut hit() function (doesnt work):
+
+std::cout << "hello\n";
+
+double magnitude_squared = u.x * u.x + u.y * u.y + u.z * u.z;
+double a = magnitude_squared * magnitude_squared,
+       b = 4 * magnitude_squared * (-center.x * u.x - center.y * u.y - center.z * u.z),
+       c = (-center.x * 2 * (3 * u.x * u.x + u.y * u.y + u.z * u.z) + u.x * 8 * (-center.y * u.y + epsilon * u.z)) + u.x * u.x * (2 * center.y * center.y + epsilon * (2 * epsilon + 2)) + 2 * (-2 * u.x * u.x + major_radius * major_radius + u.y * u.y * (3 * center.y * center.y - 2 * major_radius * major_radius + epsilon * epsilon + epsilon) + u.z * u.z * (center.y * center.y + 3 * epsilon * epsilon + epsilon) + 4 * -center.y * u.y * epsilon * u.z),
+       d = 4 * (-center.x * center.x * center.x * u.x + center.x * center.x * (-center.y * u.y + -center.z * u.z) + -center.x * u.x * (center.y * center.y + epsilon + center.z * center.z) - center.y * center.y * center.y * u.y - 2 * -center.x * u.x * major_radius * major_radius - center.z * u.z * (center.y * center.y + epsilon + center.z * center.z) + -center.y * u.y * (-2 * major_radius * major_radius + epsilon + center.z * center.z)),
+       e = center.x * center.x * center.x * center.x + 2 * center.x * center.x * (center.y * center.y + epsilon + center.z * center.z) + center.y * center.y * center.y * center.y + 2 * center.y * center.y * epsilon - 4 * center.x * center.x * major_radius * major_radius + 2 * center.y * center.y * (center.z * center.z - 2 * major_radius * major_radius) + (epsilon + center.z * center.z) * (epsilon + center.z * center.z);
+//double a = 4, b = 9, c = 8, d = 2, e = 7;
+b /= a;
+c /= a;
+d /= a;
+e /= a;
+//a = 1;
+
+(this isnt right):
+a = _b*_b*_b*_b + 2*_b*_b*_d*_d + _f*_f*_f*_f + 2*_b*_b*_f*_f + 2*_d*_d*_f*_f + _f*_f*_f*_f;
+b = 4*_a*_b*_b*_b + 4*_b*_b*_c*_d + 4*_e*_f*_f*_f + 4*_e*_b*_b*_f + 4*_a*_b*_f*_f + 4*_c*_d*_f*_f + 4*_e*_d*_d*_f + 4*_e*_f*_f*_f;
+c = 6*_a*_a*_b*_b + 2*_b*_b*_c*_c + 8*_a*_b*_c*_d + 2*_a*_a*_d*_d + 4*_a*_b*_d*_d + 6*_e*_e*_f*_f + 2*_e*_e*_b*_b + 8*_e*_a*_b*_f + 2*_a*_a*_f*_f + 2*_c*_c*_f*_f + 8*_e*_c*_d*_f + 2*_e*_e*_d*_d + 6*_e*_e*_f*_f + 2*_b*_b*epsilon + 2*_d*_d*epsilon + 2*_f*_f*epsilon - 4*_b*_b*major_radius*major_radius - 4*_d*_d*major_radius*major_radius;
+d = 4*_a*_a*_a*_b + 4*_a*_b*_c*_c + 4*_a*_a*_c*_d + 4*_e*_e*_a*_b + 4*_e*_a*_a*_f + 4*_e*_c*_c*_f + 4*_e*_e*_c*_d + 4*_a*_b*epsilon + 4*_c*_d*epsilon + 4*_e*_f*epsilon - 8*_e*_e*_e*_f - 8*_a*_b*major_radius*major_radius - 8*_c*_d*major_radius*major_radius;
+e = _a*_a*_a*_a + 2*_a*_a*_c*_c + _e*_e*_e*_e + 2*_e*_e*_a*_a + 2*_a*_a*epsilon + 2*_e*_e*_c*_c + 2*_c*_c*epsilon + _e*_e*_e*_e + 2*_e*_e*epsilon - 4*_a*_a*major_radius*major_radius - 4*_c*_c*major_radius*major_radius;
+
+(idk wtf this was):
+u -= center;
+alpha = u.x * u.x + u.y * u.y + u.z * u.z;
+double a = alpha * alpha, b = 2 * (alpha * epsilon - 2 * major_radius * (/* using center instead of u here produces funny pattern */ u.x * u.x + u.y * u.y)), c = epsilon * epsilon,
+       discriminant = b * b - 4 * a * c;
+if(discriminant < 0){return std::pair<bool, double>(false, 0);}
+double l = discriminant / (2 * a);
+if(l < b){return std::pair<bool, double>(false, 0);}
+return std::pair<bool, double>(true, 0);
+
 in windowprocessmessages (i forgot what this is supposed to do):
 case WM_GETMINMAXINFO:{
     LPMINMAXINFO e = (LPMINMAXINFO)l;
@@ -58,6 +103,34 @@ case WM_GETMINMAXINFO:{
     //e->ptMinTrackSize.y = 40;
     break;
 }
+
+above render() in global scope:
+
+auto comp = [](bool& hit_nothing, vector v, object* a, object *b){
+    // bagel supremacy
+    std::pair<bool, double> hit_a = a->hit(v), hit_b = b->hit(v);
+
+    //if(unlikely(hit_a.first && hit_b.first)){
+    //    hit_nothing = false;
+    //    return hit_a.second < hit_b.second;
+    //}
+    //if(unlikely(hit_a.first)){
+    //    hit_nothing = false;
+    //    return true;
+    //}
+    // //if(unlikely(hit_b.first)) hit_nothing = false;
+    //hit_nothing = !hit_b.first;
+    //return false;
+
+    if(unlikely(hit_a.first)){
+        hit_nothing = false;
+        if(unlikely(hit_b.first)) return hit_a.second < hit_b.second;
+        return true;
+    }
+    //if(unlikely(hit_b.first)) hit_nothing = false;
+    hit_nothing = !hit_b.first;
+    return false;
+};
 
 in render():
 vector v(-width / 2.0 + i, height / 2.0 - j, z);
@@ -101,6 +174,20 @@ for(int w = 1; w < world.size(); ++w){
 }
 if(likely(hit_nothing)) framebuf[j * width + i] = RGB(255, 0, 0);
 else framebuf[j * width + i] = smallest->clr;
+
+(check if hit sphere or polygon):
+if(unlikely(hit_sphere)){
+    if(unlikely(hit_polygon)){
+        if(hit_s.second < hit_p.second) framebuf[j * width + i] = RGB(0, 255, 0);
+        else framebuf[j * width + i] = RGB(0, 0, 255);
+    }
+    else framebuf[j * width + i] = RGB(0, 255, 0);
+}
+else if(unlikely(hit_polygon)) framebuf[j * width + i] = RGB(0, 0, 255);
+else framebuf[j * width + i] = RGB(255, 0, 0);
+
+//if(unlikely(hit_sphere || hit_polygon)) framebuf[j * width + i] = RGB(0, 0, 255);
+//else framebuf[j * width + i] = RGB(255, 0, 0);
 
 in main function (height of the window testing):
 //int a = width + 2, b = height + 29;

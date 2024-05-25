@@ -83,16 +83,6 @@ struct sphere : public object{
     sphere(color cl, double r, point c) : radius(r), center(c){set_color(cl);}
     virtual void set_color(color c){clr = c;}
     std::pair<bool, double> hit(vector u) override{
-        //double magnitude = sqrt(u.x * u.x + u.y * u.y + u.z * u.z);
-        //u.x /= magnitude, u.y /= magnitude, u.z /= magnitude;
-        /*
-        double yes = inv_sqrt(u.x * u.x + u.y * u.y + u.z * u.z);
-        u.x *= yes, u.y *= yes, u.z *= yes;
-
-        double dot = dot_product(u.x, u.y, u.z, center.x, center.y, center.z);
-        double determinant = dot * dot - center.x * center.x - center.y * center.y - center.z * center.z + radius * radius;
-        return std::pair<bool, double>(determinant >= 0, -dot - sqrt(determinant));
-        */
         double magnitude_squared = u.x * u.x + u.y * u.y + u.z * u.z;
         double dot = dot_product(u.x, u.y, u.z, center.x, center.y, center.z);
         double determinant = dot * dot - magnitude_squared * (center.x * center.x + center.y * center.y + center.z * center.z - radius * radius);
@@ -179,30 +169,18 @@ private:
 struct doughnut : public object{
     point center;
     double minor_radius, major_radius;
-    doughnut(color cl, double minor_r, double major_r, point c) : center(c), minor_radius(minor_r), major_radius(major_r), epsilon(major_r * major_r - minor_r * minor_r){set_color(cl);}
+    double yaw_rad, pitch_rad, roll_rad;
+    doughnut(color cl, double minor_r, double major_r, point c, double yaw = 0, double pitch = 0, double roll = 0) :
+        center(c), minor_radius(minor_r), major_radius(major_r), yaw_rad(yaw), pitch_rad(pitch), roll_rad(roll), epsilon(major_r * major_r - minor_r * minor_r){set_color(cl);}
     virtual void set_color(color c){clr = c;}
     std::pair<bool, double> hit(vector u) override{
-        //std::cout << "hello\n";
-        /*
-        double magnitude_squared = u.x * u.x + u.y * u.y + u.z * u.z;
-        double a = magnitude_squared * magnitude_squared,
-               b = 4 * magnitude_squared * (-center.x * u.x - center.y * u.y - center.z * u.z),
-               c = (-center.x * 2 * (3 * u.x * u.x + u.y * u.y + u.z * u.z) + u.x * 8 * (-center.y * u.y + epsilon * u.z)) + u.x * u.x * (2 * center.y * center.y + epsilon * (2 * epsilon + 2)) + 2 * (-2 * u.x * u.x + major_radius * major_radius + u.y * u.y * (3 * center.y * center.y - 2 * major_radius * major_radius + epsilon * epsilon + epsilon) + u.z * u.z * (center.y * center.y + 3 * epsilon * epsilon + epsilon) + 4 * -center.y * u.y * epsilon * u.z),
-               d = 4 * (-center.x * center.x * center.x * u.x + center.x * center.x * (-center.y * u.y + -center.z * u.z) + -center.x * u.x * (center.y * center.y + epsilon + center.z * center.z) - center.y * center.y * center.y * u.y - 2 * -center.x * u.x * major_radius * major_radius - center.z * u.z * (center.y * center.y + epsilon + center.z * center.z) + -center.y * u.y * (-2 * major_radius * major_radius + epsilon + center.z * center.z)),
-               e = center.x * center.x * center.x * center.x + 2 * center.x * center.x * (center.y * center.y + epsilon + center.z * center.z) + center.y * center.y * center.y * center.y + 2 * center.y * center.y * epsilon - 4 * center.x * center.x * major_radius * major_radius + 2 * center.y * center.y * (center.z * center.z - 2 * major_radius * major_radius) + (epsilon + center.z * center.z) * (epsilon + center.z * center.z);
-        //double a = 4, b = 9, c = 8, d = 2, e = 7;
-        b /= a;
-        c /= a;
-        d /= a;
-        e /= a;
-        //a = 1;
-        */
         double magnitude = sqrt(u.x * u.x + u.y * u.y + u.z * u.z);
         double big = 10;
         u.x /= (magnitude * big), u.y /= (magnitude * big), u.z /= (magnitude * big);
-        double a, b, c, d, e;
+        long double a, b, c, d, e;
         {
-            double _a = -center.x, _b = u.x, _c = -center.y, _d = u.y, _e = -center.z, _f = u.z;
+            long double _a = -center.x, _b = u.x, _c = -center.y, _d = u.y, _e = -center.z, _f = u.z;
+
             a = _b*_b*_b*_b + 2*_b*_b*_d*_d + _d*_d*_d*_d + _f*_f*_f*_f + 2*_b*_b*_f*_f + 2*_d*_d*_f*_f;
             b = 4*_a*_b*_b*_b + 4*_a*_b*_d*_d + 4*_b*_b*_c*_d + 4*_c*_d*_d*_d + 4*_e*_f*_f*_f + 4*_a*_b*_f*_f + 4*_e*_b*_b*_f + 4*_c*_d*_f*_f + 4*_e*_d*_d*_f;
             c = 6*_a*_a*_b*_b + 2*_a*_a*_d*_d + 8*_a*_b*_c*_d + 2*_b*_b*_c*_c + 6*_c*_c*_d*_d * 6*_e*_e*_f*_f + 2*_a*_a*_f*_f + 8*_e*_a*_b*_f + 2*_e*_e*_b*_b + 2*_c*_c*_f*_f + 8*_e*_c*_d*_f + 2*_e*_e*_d*_d + 2*epsilon*_b*_b + 2*epsilon*_d*_d + 2*epsilon*_f*_f - 4*major_radius*major_radius*_b*_b - 4*major_radius*major_radius*_d*_d;
@@ -214,30 +192,22 @@ struct doughnut : public object{
         d /= a;
         e /= a;
         //std::cout << a << ' ' << b << ' ' << c << ' ' << d << ' ' << e << ' ' << '\n';
-        double discriminant = 256 * e * e * e - 192 * b * d * e * e - 128 * c * c * e * e + 144 * c * d * d * e - 27 * d * d * d *d + 144 * b * b * c * e * e - 6 * b * b * d * d * e - 80 * b * c * c * d * e + 18 * b * c * d * d * d + 16 * c * c * c * c * e - 4 * c * c * c * d * d - 27 * b * b * b * b * e * e + 18 * b * b * b * c * d * e - 4 * b * b * b * d * d * d - 4 * b * b * c * c * c * e + b * b * c * c * d * d;
-        //return std::pair<bool, double>(true, 100);
-        double p = 8 * c - 3 * b * b;
-        double g = 64 * e - 16 * c * c + 16 * b * b * c - 16 * b * d - 3 * b * b * b * b;
+        long double discriminant = 256 * e * e * e - 192 * b * d * e * e - 128 * c * c * e * e + 144 * c * d * d * e - 27 * d * d * d *d + 144 * b * b * c * e * e - 6 * b * b * d * d * e - 80 * b * c * c * d * e + 18 * b * c * d * d * d + 16 * c * c * c * c * e - 4 * c * c * c * d * d - 27 * b * b * b * b * e * e + 18 * b * b * b * c * d * e - 4 * b * b * b * d * d * d - 4 * b * b * c * c * c * e + b * b * c * c * d * d;
+        long double p = 8 * c - 3 * b * b;
+        long double g = 64 * e - 16 * c * c + 16 * b * b * c - 16 * b * d - 3 * b * b * b * b;
         if(discriminant < 0) return std::pair<bool, double>(true, 100);
         if(!discriminant) return std::pair<bool, double>(!(!g && p > 0 && b * b * b + 8 * d - 4 * b * c), 100);
         //if(discriminant > 0)
         //return std::pair<bool, double>(!(p > 0 || g > 0), 100);
         return std::pair<bool, double>(p < 0 && g < 0, 100);
-        //u -= center;
-        //alpha = u.x * u.x + u.y * u.y + u.z * u.z;
-        //double a = alpha * alpha, b = 2 * (alpha * epsilon - 2 * major_radius * (/* using center instead of u here produces funny pattern */ u.x * u.x + u.y * u.y)), c = epsilon * epsilon,
-        //       discriminant = b * b - 4 * a * c;
-        //if(discriminant < 0){return std::pair<bool, double>(false, 0);}
-        //double l = discriminant / (2 * a);
-        //if(l < b){return std::pair<bool, double>(false, 0);}
-        //return std::pair<bool, double>(true, 0);
     }
 private:
-    double /*alpha,*/ epsilon;
+    double epsilon;
 };
 
 sphere s(RGB(0, 0, 255), sqrt(100000), point(100, 41.5, 2000));
-doughnut d(RGB(0, 255, 0), 200, 300, point(100, 100, 5000));
+//doughnut d(RGB(0, 255, 0), 200, 300, point(100, 100, 5000));
+doughnut d(RGB(255, 0, 255), 60, 90, point(0, 0, 0));
 point a(-250, -300, 2400), b(250, 200, 1500), c(350, -100, 1000)
 #ifdef QUAD
     , d(-250, -100, 2000)
@@ -250,37 +220,8 @@ polygon p(RGB(0, 255, 0), a, b, c
 );
 std::vector<object*> world = {&s, &p, &d};
 double z = width / (2 * tan(horizontal_fov / 2));
-/*
-auto comp = [](bool& hit_nothing, vector v, object* a, object *b){
-    // bagel supremacy
-    std::pair<bool, double> hit_a = a->hit(v), hit_b = b->hit(v);
-
-    //if(unlikely(hit_a.first && hit_b.first)){
-    //    hit_nothing = false;
-    //    return hit_a.second < hit_b.second;
-    //}
-    //if(unlikely(hit_a.first)){
-    //    hit_nothing = false;
-    //    return true;
-    //}
-    // //if(unlikely(hit_b.first)) hit_nothing = false;
-    //hit_nothing = !hit_b.first;
-    //return false;
-
-    if(unlikely(hit_a.first)){
-        hit_nothing = false;
-        if(unlikely(hit_b.first)) return hit_a.second < hit_b.second;
-        return true;
-    }
-    //if(unlikely(hit_b.first)) hit_nothing = false;
-    hit_nothing = !hit_b.first;
-    return false;
-};
-*/
-#include <chrono>
-using namespace std::chrono;
 std::function<void()> render =
-[/*&f*/](){
+[](){
     //todo: use the gpu for calculations
     ++f;
     for(int j = height - 1; j >= 0; --j){
@@ -293,12 +234,27 @@ std::function<void()> render =
                 //double temp = vx;
                 //vx = cos(yaw_angle_radians) * vx - sin(yaw_angle_radians) * vy;
                 //vy = sin(yaw_angle_radians) * temp + cos(yaw_angle_radians) * vy;
-                vx -= vz * sin(yaw_angle_radians);
+
+                //double cos_yar = cos(yaw_angle_radians), sin_yar = sin(yaw_angle_radians), sin_yar_vx = sin_yar * vx;
+                //vx = cos_yar * vx + sin_yar * vz;
+                //vz = -sin_yar_vx + cos_yar * vz;
+
+                //vx -= vz * sin(yaw_angle_radians);
+
+                yaw_angle_radians = yaw_angle_radians - (yaw_angle_radians > 6.28318) * 6.28318;
+                //std::cout << yaw_angle_radians << '\n';
+                //vx += vz * sin(yaw_angle_radians) * ((yaw_angle_radians > 1.5708 && yaw_angle_radians < 4.71239) ? -1 : 1);
+                //tan undefined at 90 deg and 270 deg
+                //todo: make every rotation equal, instead of some rotating more than others
+                vx += vz * tan(yaw_angle_radians);
             }
             if(pitch_angle_radians){
                 //double temp = vx;
                 //vx = cos(pitch_angle_radians) * vx + sin(pitch_angle_radians) * vz;
                 //vz = -sin(pitch_angle_radians) * temp + cos(pitch_angle_radians) * vz;
+                //vy += vz * sin(pitch_angle_radians);
+
+                //todo: update pitch_angle_radians
                 vy += vz * sin(pitch_angle_radians);
             }
             if(roll_angle_radians){
@@ -310,48 +266,7 @@ std::function<void()> render =
                 vy = sin_rar_vx + cos_rar * vy;
             }
             vector v(vx, vy, vz);
-            //vector v(-width / 2.0 + i, height / 2.0 - j, z);
 
-            //use x86_64-w64-mingw32-g++ for better performance
-            //auto start = high_resolution_clock::now();
-
-            //std::pair<bool, double> hit_s = (world[0])->hit(v);
-            //bool hit_sphere = hit_s.first;
-            //double distance_to_sphere = hit_s.second;
-
-            //std::pair<bool, double> hit_p = (world[1])->hit(v);
-            //bool hit_polygon = hit_p.first;
-            //double distance_to_polygon = hit_p.second;
-
-            //auto stop = high_resolution_clock::now();
-            //duration<double, std::milli> time_double = stop - start;
-            //if(time_double.count()) std::cout << "count: " << time_double.count() << '\n';
-            //std::cout << "count: " << time_double.count() << '\n';
-            // for multiple objects create a list of objects the ray hit
-            // with either inheritance or std::any or smth
-            // and find which of the distances is least
-            /*
-            bool hit_nothing = true;
-            object* smallest = world[0];
-
-            for(int w = 1; w < world.size(); ++w){
-                //if(comp(hit_nothing, v, world[i], smallest)) smallest = world[i];
-                std::pair<bool, double> hit_a = world[w]->hit(v), hit_b = smallest->hit(v);
-                //std::pair<bool, double> hit_a(0, 0), hit_b(0, 0);
-
-                if(unlikely(hit_a.first)){
-                    hit_nothing = false;
-                    if(unlikely(hit_b.first)){
-                        if(hit_a.second < hit_b.second)
-                            smallest = world[w];
-                    }
-                    else smallest = world[w];
-                }
-                else hit_nothing = !hit_b.first;
-            }
-            if(likely(hit_nothing)) framebuf[j * width + i] = RGB(255, 0, 0);
-            else framebuf[j * width + i] = smallest->clr;
-            */
             bool hit_nothing = true, small_change = false;
             object* smallest = world[0];
             std::pair<bool, double> hit_b = smallest->hit(v);
@@ -373,19 +288,6 @@ std::function<void()> render =
             }
             if(likely(hit_nothing)) framebuf[j * width + i] = RGB(255, 0, 0);
             else framebuf[j * width + i] = smallest->clr;
-            /*
-            if(unlikely(hit_sphere)){
-                if(unlikely(hit_polygon)){
-                    if(hit_s.second < hit_p.second) framebuf[j * width + i] = RGB(0, 255, 0);
-                    else framebuf[j * width + i] = RGB(0, 0, 255);
-                }
-                else framebuf[j * width + i] = RGB(0, 255, 0);
-            }
-            else if(unlikely(hit_polygon)) framebuf[j * width + i] = RGB(0, 0, 255);
-            else framebuf[j * width + i] = RGB(255, 0, 0);
-            */
-            //if(unlikely(hit_sphere || hit_polygon)) framebuf[j * width + i] = RGB(0, 0, 255);
-            //else framebuf[j * width + i] = RGB(255, 0, 0);
         }
     }
 }
