@@ -12,7 +12,7 @@ im trying to make a torus rn
 
 ![image](/images/line-torus.PNG)
 
-but idk wtf im doing
+but idk what im doing
 
 btw yes_cursed.exe is way too cursed
 
