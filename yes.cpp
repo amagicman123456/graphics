@@ -363,6 +363,9 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
     return 0;
 }
 int main(){
+    //std::ios_base::sync_with_stdio(false);
+    //std::cout.tie(0);
+    //std::cin.tie(0);
     _beginthread(fps, 0, 0);
     char name[] = "omg";
     WNDCLASS wc{};
