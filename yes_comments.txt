@@ -148,6 +148,20 @@ auto comp = [](bool& hit_nothing, vector v, object* a, object *b){
 };
 
 in render():
+
+    in yaw angle rotating (its spaghetti):
+    double temp = vx;
+    vx = cos(yaw_angle_radians) * vx - sin(yaw_angle_radians) * vy;
+    vy = sin(yaw_angle_radians) * temp + cos(yaw_angle_radians) * vy;
+    vx -= vz * sin(yaw_angle_radians);
+
+    yaw_angle_radians = yaw_angle_radians - (yaw_angle_radians > 6.28318) * 6.28318;
+    std::cout << yaw_angle_radians << '\n';
+    vx += vz * sin(yaw_angle_radians) * ((yaw_angle_radians > 1.5708 && yaw_angle_radians < 4.71239) ? -1 : 1);
+    //tan undefined at 90 deg and 270 deg
+    vx += vz * tan(yaw_angle_radians);
+    std::cout << vx << '\n';
+
 vector v(-width / 2.0 + i, height / 2.0 - j, z);
 
 use x86_64-w64-mingw32-g++ for better performance

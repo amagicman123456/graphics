@@ -68,6 +68,8 @@ struct sphere : public object{
     sphere(color cl, double r, point c) : radius(r), center(c){set_color(cl);}
     virtual void set_color(color c){clr = c;}
     std::pair<bool, double> hit(vector u) override{
+        //todo: do the same thing for u.x and u.y
+        if((u.z > 0 && center.z < radius) || (u.z < 0 && center.z > radius)) return std::pair<bool, double>(false, 0);
         double magnitude_squared = u.x * u.x + u.y * u.y + u.z * u.z;
         double dot = dot_product(u.x, u.y, u.z, center.x, center.y, center.z);
         double determinant = dot * dot - magnitude_squared * (center.x * center.x + center.y * center.y + center.z * center.z - radius * radius);
@@ -96,6 +98,11 @@ struct polygon : public object{
         p.z = greatest;
     };
     std::pair<bool, double> hit(vector u) override{
+        //todo: do the same thing for u.x and u.y
+        for(point& i : points)
+            if((u.z < 0 && i.z < 0) || (u.z > 0 && i.z > 0)) goto polygon_start;
+        return std::pair<bool, double>(false, 0);
+        polygon_start:
         double e = u.x * c.x + u.y * c.y + u.z * c.z;
         double t = k / e;
         if(likely(!e || (u.z * t < 0))) return std::pair<bool, double>(false, 0);
@@ -159,6 +166,7 @@ struct doughnut : public object{
         center(c), minor_radius(minor_r), major_radius(major_r), yaw_rad(yaw), pitch_rad(pitch), roll_rad(roll), epsilon(major_r * major_r - minor_r * minor_r){set_color(cl);}
     virtual void set_color(color c){clr = c;}
     std::pair<bool, double> hit(vector u) override{
+        //todo: instantly return false if donut is not in field of view
         double magnitude = sqrt(u.x * u.x + u.y * u.y + u.z * u.z);
         double big = 10;
         u.x /= (magnitude * big), u.y /= (magnitude * big), u.z /= (magnitude * big);
@@ -216,22 +224,9 @@ std::function<void()> render =
             double vz = z;
             //todo: its kinda slow ngl
             if(yaw_angle_radians){
-                //double temp = vx;
-                //vx = cos(yaw_angle_radians) * vx - sin(yaw_angle_radians) * vy;
-                //vy = sin(yaw_angle_radians) * temp + cos(yaw_angle_radians) * vy;
-
-                //double cos_yar = cos(yaw_angle_radians), sin_yar = sin(yaw_angle_radians), sin_yar_vx = sin_yar * vx;
-                //vx = cos_yar * vx + sin_yar * vz;
-                //vz = -sin_yar_vx + cos_yar * vz;
-
-                //vx -= vz * sin(yaw_angle_radians);
-
-                yaw_angle_radians = yaw_angle_radians - (yaw_angle_radians > 6.28318) * 6.28318;
-                //std::cout << yaw_angle_radians << '\n';
-                //vx += vz * sin(yaw_angle_radians) * ((yaw_angle_radians > 1.5708 && yaw_angle_radians < 4.71239) ? -1 : 1);
-                //tan undefined at 90 deg and 270 deg
-                //todo: make every rotation equal, instead of some rotating more than others
-                vx += vz * tan(yaw_angle_radians);
+                double cos_yar = cos(yaw_angle_radians), sin_yar = sin(yaw_angle_radians), sin_yar_vx = sin_yar * vx;
+                vx = cos_yar * vx + sin_yar * vz;
+                vz = -sin_yar_vx + cos_yar * vz;
             }
             if(pitch_angle_radians){
                 //double temp = vx;
@@ -239,7 +234,7 @@ std::function<void()> render =
                 //vz = -sin(pitch_angle_radians) * temp + cos(pitch_angle_radians) * vz;
                 //vy += vz * sin(pitch_angle_radians);
 
-                //todo: update pitch_angle_radians
+                //todo: update pitch instead of this
                 vy += vz * sin(pitch_angle_radians);
             }
             if(roll_angle_radians){
