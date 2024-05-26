@@ -19,9 +19,10 @@ void fps(void*){
         std::cout << f << '\n';
         f = 0;
 
-        yaw_angle_radians = yaw_angle_radians + 0.175;
+        //yaw_angle_radians = yaw_angle_radians + 0.175;
         //if(yaw_angle_radians > 6.28) yaw_angle_radians = 0;
         //pitch_angle_radians = (!pitch_angle_radians) * 0.175;
+        pitch_angle_radians = pitch_angle_radians + 0.175;
         //roll_angle_radians = (!roll_angle_radians) * 0.35;
     }
 }
@@ -66,9 +67,10 @@ struct sphere : public object{
     sphere(color cl, double r, point c) : radius(r), center(c){set_color(cl);}
     virtual void set_color(color c){clr = c;}
     std::pair<bool, double> hit(vector u) override{
+        //this will be in render instead
         //todo: do the same thing for u.x and u.y
         //todo: also fast reject if sphere is not in field of view
-        if((u.z > 0 && center.z < radius) || (u.z < 0 && center.z > radius)) return std::pair<bool, double>(false, 0);
+        //if((u.z > 0 && center.z < radius) || (u.z < 0 && center.z > radius)) return std::pair<bool, double>(false, 0);
         double magnitude_squared = u.x * u.x + u.y * u.y + u.z * u.z;
         double dot = dot_product(u.x, u.y, u.z, center.x, center.y, center.z);
         double determinant = dot * dot - magnitude_squared * (center.x * center.x + center.y * center.y + center.z * center.z - radius * radius);
@@ -97,12 +99,13 @@ struct polygon : public object{
         p.z = greatest;
     };
     std::pair<bool, double> hit(vector u) override{
+        //this will be in render instead
         //todo: do the same thing for u.x and u.y
         //todo: also fast reject if polygon is not in field of view
-        for(point& i : points)
-            if((u.z < 0 && i.z < 0) || (u.z > 0 && i.z > 0)) goto polygon_start;
-        return std::pair<bool, double>(false, 0);
-        polygon_start:
+        //for(point& i : points)
+        //    if((u.z < 0 && i.z < 0) || (u.z > 0 && i.z > 0)) goto polygon_start;
+        //return std::pair<bool, double>(false, 0);
+        //polygon_start:
         double e = u.x * c.x + u.y * c.y + u.z * c.z;
         double t = k / e;
         if(likely(!e || (u.z * t < 0))) return std::pair<bool, double>(false, 0);
@@ -169,6 +172,7 @@ struct doughnut : public object{
         u -= center;
         //todo: rotate u by the matrix which is the product of the negative pitch_rad matrix and the negative roll_rad matrix
 
+        //this will be in render
         //todo: then instantly return false if donut is not in field of view
         double magnitude = sqrt(u.x * u.x + u.y * u.y + u.z * u.z);
         double big = 10;
@@ -219,6 +223,8 @@ double z = width / (2 * tan(horizontal_fov / 2));
 std::function<void()> render =
 [](){
     //todo: use the gpu for calculations
+    //todo: rotate the entire bounding box by yaw, pitch, and roll
+
     ++f;
     for(int j = height - 1; j >= 0; --j){
         for(int i = 0; i < width; ++i){
@@ -237,8 +243,12 @@ std::function<void()> render =
                 //vz = -sin(pitch_angle_radians) * temp + cos(pitch_angle_radians) * vz;
                 //vy += vz * sin(pitch_angle_radians);
 
+                double cos_par = cos(pitch_angle_radians), sin_par = sin(pitch_angle_radians), sin_par_vy = sin_par * vy;
+                vy = cos_par * vy - sin_par * vz;
+                vz = sin_par_vy + cos_par * vz;
+
                 //todo: update pitch to something instead of this
-                vy += vz * sin(pitch_angle_radians);
+                //vy += vz * sin(pitch_angle_radians);
             }
             if(roll_angle_radians){
                 //double temp = vy;
@@ -254,6 +264,7 @@ std::function<void()> render =
             object* smallest = world[0];
             std::pair<bool, double> hit_b = smallest->hit(v);
             //todo: likely and unlikely might be unnecessary
+            //todo: fast reject if shape is not in bounding box
             for(int w = 1; w < (int)world.size(); ++w){
                 //if(comp(hit_nothing, v, world[i], smallest)) smallest = world[i];
                 std::pair<bool, double> hit_a = world[w]->hit(v);
