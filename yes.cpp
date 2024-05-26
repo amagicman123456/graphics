@@ -219,6 +219,7 @@ double z = width / (2 * tan(horizontal_fov / 2));
 std::function<void()> render =
 [](){
     //todo: use the gpu for calculations
+    //todo: rotate the 4 corners of the bounding box and check if the shape is inside
     ++f;
     for(int j = height - 1; j >= 0; --j){
         for(int i = 0; i < width; ++i){
