@@ -167,7 +167,8 @@ struct doughnut : public object{
     virtual void set_color(color c){clr = c;}
     std::pair<bool, double> hit(vector u) override{
         u -= center;
-        //todo: rotate u by negative pitch_rad, and negative roll_rad
+        //todo: rotate u by the matrix which is the product of the negative pitch_rad matrix and the negative roll_rad matrix
+
         //todo: then instantly return false if donut is not in field of view
         double magnitude = sqrt(u.x * u.x + u.y * u.y + u.z * u.z);
         double big = 10;
@@ -236,7 +237,7 @@ std::function<void()> render =
                 //vz = -sin(pitch_angle_radians) * temp + cos(pitch_angle_radians) * vz;
                 //vy += vz * sin(pitch_angle_radians);
 
-                //todo: update pitch instead of this
+                //todo: update pitch to something instead of this
                 vy += vz * sin(pitch_angle_radians);
             }
             if(roll_angle_radians){
