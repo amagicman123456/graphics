@@ -161,12 +161,14 @@ private:
 struct doughnut : public object{
     point center;
     double minor_radius, major_radius;
-    double yaw_rad, pitch_rad, roll_rad;
-    doughnut(color cl, double minor_r, double major_r, point c, double yaw = 0, double pitch = 0, double roll = 0) :
-        center(c), minor_radius(minor_r), major_radius(major_r), yaw_rad(yaw), pitch_rad(pitch), roll_rad(roll), epsilon(major_r * major_r - minor_r * minor_r){set_color(cl);}
+    double pitch_rad, roll_rad;
+    doughnut(color cl, double minor_r, double major_r, point c, double pitch = 0, double roll = 0) :
+        center(c), minor_radius(minor_r), major_radius(major_r), pitch_rad(pitch), roll_rad(roll), epsilon(major_r * major_r - minor_r * minor_r){set_color(cl);}
     virtual void set_color(color c){clr = c;}
     std::pair<bool, double> hit(vector u) override{
-        //todo: instantly return false if donut is not in field of view
+        u -= center;
+        //todo: rotate u by negative pitch_rad, and negative roll_rad
+        //todo: then instantly return false if donut is not in field of view
         double magnitude = sqrt(u.x * u.x + u.y * u.y + u.z * u.z);
         double big = 10;
         u.x /= (magnitude * big), u.y /= (magnitude * big), u.z /= (magnitude * big);
