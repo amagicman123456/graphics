@@ -58,6 +58,7 @@ typedef uint32_t color;
 typedef point vector;
 struct object{
     virtual std::pair<bool, double> hit(vector u) = 0;
+    virtual bool is_in_frustum(point bounding[4]) = 0;
     virtual void set_color(color c){clr = c;}
     color clr;
 };
@@ -71,12 +72,23 @@ struct sphere : public object{
         //todo: do the same thing for u.x and u.y
         //todo: also fast reject if sphere is not in field of view
         //if((u.z > 0 && center.z < radius) || (u.z < 0 && center.z > radius)) return std::pair<bool, double>(false, 0);
+        //magnitude(cross(A - B, C - B)) 
+        //divided by magnitude(C - B)
         double magnitude_squared = u.x * u.x + u.y * u.y + u.z * u.z;
         double dot = dot_product(u.x, u.y, u.z, center.x, center.y, center.z);
         double determinant = dot * dot - magnitude_squared * (center.x * center.x + center.y * center.y + center.z * center.z - radius * radius);
         // if determinant < 0 you can't sqrt it
         if(determinant < 0) return std::pair<bool, double>(false, 0);
         return std::pair<bool, double>(true, (-dot - sqrt(determinant)) / magnitude_squared);
+    }
+    bool is_in_frustum(point bounding[4]) override{
+        //FOR A LINE
+        //magnitude(cross(A - B, C - B)) 
+        //divided by magnitude(C - B)
+        //so let j = C - B, sqrt(cross(A - B, j)^2 / (j.x * j.x + j.y * j.y + j.z * j.z))
+        
+        //if( < radius * radius)
+        return true; //for now
     }
 };
 vector cross_product(vector a, vector b){
@@ -156,6 +168,9 @@ struct polygon : public object{
                     inside = !inside;
         return std::pair<bool, double>(inside, distance);
     }
+    bool is_in_frustum(point bounding[4]) override{
+        return true; // for now
+    }
 private:
     vector a, b, c;
     double k;
@@ -201,6 +216,9 @@ struct doughnut : public object{
         //return std::pair<bool, double>(!(p > 0 || g > 0), 100);
         return std::pair<bool, double>(p < 0 && g < 0, 100);
     }
+    bool is_in_frustum(point bounding[4]) override{
+        return true; //for now
+    }
 private:
     double epsilon;
 };
@@ -223,15 +241,26 @@ double z = width / (2 * tan(horizontal_fov / 2));
 std::function<void()> render =
 [](){
     //todo: use the gpu for calculations
-    //todo: rotate the entire bounding box by yaw, pitch, and roll
-
+    //magnitude(cross(A - B, C - B)) 
+    //divided by magnitude(C - B)
+	std::vector<object*> can_hit = std::move(world); // copy
+    point bounding[4]{
+        point(0, height / 2.0, z), //upper left
+        point(width / 2.0, height / 2.0, z), //upper right
+        point(0, 0, z), //bottom left
+        point(width / 2.0, 0, z) //bottom right
+    };
+    //todo: rotate the points by yaw pitch and roll, during initialization or after
+    can_hit.erase(std::remove_if(can_hit.begin(), can_hit.end(), [](object* i){return !(*i)->is_in_frustum(bounding);}));
     ++f;
+    //todo: start from upper left instead
     for(int j = height - 1; j >= 0; --j){
         for(int i = 0; i < width; ++i){
             double vx = -width / 2.0 + i;
             double vy = height / 2.0 - j;
             double vz = z;
             //todo: its kinda slow ngl
+            //todo: remove yaw pitch and roll here
             if(yaw_angle_radians){
                 double cos_yar = cos(yaw_angle_radians), sin_yar = sin(yaw_angle_radians), sin_yar_vx = sin_yar * vx;
                 vx = cos_yar * vx + sin_yar * vz;
@@ -261,13 +290,12 @@ std::function<void()> render =
             vector v(vx, vy, vz);
 
             bool hit_nothing = true, small_change = false;
-            object* smallest = world[0];
+            object* smallest = can_hit[0];
             std::pair<bool, double> hit_b = smallest->hit(v);
             //todo: likely and unlikely might be unnecessary
-            //todo: fast reject if shape is not in bounding box
-            for(int w = 1; w < (int)world.size(); ++w){
+            for(int w = 1; w < (int)can_hit.size(); ++w){
                 //if(comp(hit_nothing, v, world[i], smallest)) smallest = world[i];
-                std::pair<bool, double> hit_a = world[w]->hit(v);
+                std::pair<bool, double> hit_a = can_hit[w]->hit(v);
                 if(small_change) hit_b = smallest->hit(v), small_change = false;
                 //std::pair<bool, double> hit_a(0, 0), hit_b(0, 0);
 
@@ -275,9 +303,9 @@ std::function<void()> render =
                     hit_nothing = false;
                     if(unlikely(hit_b.first)){
                         if(hit_a.second < hit_b.second)
-                            smallest = world[w], small_change = true;
+                            smallest = can_hit[w], small_change = true;
                     }
-                    else smallest = world[w], small_change = true;
+                    else smallest = can_hit[w], small_change = true;
                 }
                 else hit_nothing = !hit_b.first;
             }
