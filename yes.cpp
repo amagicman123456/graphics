@@ -28,16 +28,16 @@ void fps(void*){
 }
 int width = 1200, height = 600, tick_count, *framebuf;
 double horizontal_fov = 120, vertical_fov = atan(tan(height / 2.0) * height / width);
-double square(double x){
+inline double square(double x){
     return x * x;
 }
-double greater(double a, double b){
+inline double greater(double a, double b){
     return a > b ? a : b;
 }
-double abs_val(double a){
+inline double abs_val(double a){
     return a < 0 ? -a : a;
 }
-double dot_product(double ax, double ay, double az, double bx, double by, double bz){
+inline double dot_product(double ax, double ay, double az, double bx, double by, double bz){
     return ax * bx + ay * by + az * bz;
 }
 struct point{
