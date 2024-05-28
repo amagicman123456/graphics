@@ -250,7 +250,9 @@ std::function<void()> render =
         point(0, 0, z), //bottom left
         point(width / 2.0, 0, z) //bottom right
     };
-    //todo: rotate the points by yaw pitch and roll, during initialization or after
+    //todo: rotate the bounding points by yaw pitch and roll, during initialization or after
+
+    //todo: in is_in_frustum() for every object, create polygons, find the distance to either the center or all points, and check if any part of the shape is inside
     #if __cplusplus >= 202002L
         std::erase_if(can_hit, [&bounding](object* i){return !i->is_in_frustum(bounding);});
     #else
