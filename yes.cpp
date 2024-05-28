@@ -243,7 +243,7 @@ std::function<void()> render =
     //todo: use the gpu for calculations
     //magnitude(cross(A - B, C - B)) 
     //divided by magnitude(C - B)
-	std::vector<object*> can_hit = std::move(world); // copy
+	std::vector<object*> can_hit = world; // copy
     point bounding[4]{
         point(0, height / 2.0, z), //upper left
         point(width / 2.0, height / 2.0, z), //upper right
@@ -251,7 +251,13 @@ std::function<void()> render =
         point(width / 2.0, 0, z) //bottom right
     };
     //todo: rotate the points by yaw pitch and roll, during initialization or after
-    can_hit.erase(std::remove_if(can_hit.begin(), can_hit.end(), [](object* i){return !(*i)->is_in_frustum(bounding);}));
+    #if __cplusplus >= 202002L
+        std::erase_if(can_hit, [&bounding](object* i){return !i->is_in_frustum(bounding);});
+    #else
+        auto it = std::remove_if(can_hit.begin(), can_hit.end(), [&bounding](object* i){return !i->is_in_frustum(bounding);});
+        auto r = can_hit.end() - it;
+        can_hit.erase(it, can_hit.end());
+    #endif
     ++f;
     //todo: start from upper left instead
     for(int j = height - 1; j >= 0; --j){
