@@ -243,21 +243,15 @@ std::function<void()> render =
     //todo: use the gpu for calculations
     //magnitude(cross(A - B, C - B)) 
     //divided by magnitude(C - B)
-	std::vector<object*> can_hit = world; // copy
+	std::vector<object*> can_hit = std::move(world); // copy
     point bounding[4]{
         point(0, height / 2.0, z), //upper left
         point(width / 2.0, height / 2.0, z), //upper right
         point(0, 0, z), //bottom left
         point(width / 2.0, 0, z) //bottom right
     };
-    //todo: rotate the bounding points by yaw pitch and roll, during initialization or after
-
-    //todo: in is_in_frustum() for every object, create polygons, find the distance to either the center or all points, and check if any part of the shape is inside
-    #if __cplusplus >= 202002L
-        std::erase_if(can_hit, [&bounding](object* i){return !i->is_in_frustum(bounding);});
-    #else
-        can_hit.erase(std::remove_if(can_hit.begin(), can_hit.end(), [&bounding](object* i){return !i->is_in_frustum(bounding);}), can_hit.end());
-    #endif
+    //todo: rotate the points by yaw pitch and roll, during initialization or after
+    can_hit.erase(std::remove_if(can_hit.begin(), can_hit.end(), [](object* i){return !(*i)->is_in_frustum(bounding);}));
     ++f;
     //todo: start from upper left instead
     for(int j = height - 1; j >= 0; --j){
@@ -322,7 +316,7 @@ std::function<void()> render =
 }
 , resize =
 [](){
-
+    z = width / (2 * tan(horizontal_fov / 2));
 };
 LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
     static HDC pdc;
