@@ -256,9 +256,7 @@ std::function<void()> render =
     #if __cplusplus >= 202002L
         std::erase_if(can_hit, [&bounding](object* i){return !i->is_in_frustum(bounding);});
     #else
-        auto it = std::remove_if(can_hit.begin(), can_hit.end(), [&bounding](object* i){return !i->is_in_frustum(bounding);});
-        auto r = can_hit.end() - it;
-        can_hit.erase(it, can_hit.end());
+        can_hit.erase(std::remove_if(can_hit.begin(), can_hit.end(), [&bounding](object* i){return !i->is_in_frustum(bounding);}), can_hit.end());
     #endif
     ++f;
     //todo: start from upper left instead
