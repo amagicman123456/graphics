@@ -53,6 +53,9 @@ struct point{
         z -= g.z;
         return *this;
     }
+    point operator*(point h){
+        return point(x * h.x, y * h.y, z * h.z);
+    }
 };
 typedef uint32_t color;
 typedef point vector;
@@ -88,7 +91,15 @@ struct sphere : public object{
         //so let j = C - B, sqrt(cross(A - B, j)^2 / (j.x * j.x + j.y * j.y + j.z * j.z))
         
         //if( < radius * radius)
-        return true; //for now
+        point plane[3]{bounding[0], bounding[2], /* any number*/ 0.5 * bounding[0]};
+        for(point& i : plane) i -= center;
+        
+        vector a = plane[1] - plane[0], b = plane[2] - plane[0];
+        double i = a.y * b.z - a.z * b.y,
+               j = a.x * b.z - a.z * b.x,
+               k = a.x * b.y - a.y * b.x;
+        double d = i * -plane[0].x + j * -plane[0].y + k * -plane[0].z;
+        return d / (i * i + j * j + k * k) < radius; //for now
     }
 };
 vector cross_product(vector a, vector b){
