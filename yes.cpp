@@ -53,15 +53,15 @@ struct point{
         z -= g.z;
         return *this;
     }
-    point operator*(point h){
-        return point(x * h.x, y * h.y, z * h.z);
+    point operator*(double h){
+        return point(x * h, y * h, z * h);
     }
 };
 typedef uint32_t color;
 typedef point vector;
 struct object{
     virtual std::pair<bool, double> hit(vector u) = 0;
-    virtual bool is_in_frustum(point bounding[4]) = 0;
+    virtual bool is_in_frustum(std::vector<std::vector<point>> plane) = 0;
     virtual void set_color(color c){clr = c;}
     color clr;
 };
@@ -84,22 +84,34 @@ struct sphere : public object{
         if(determinant < 0) return std::pair<bool, double>(false, 0);
         return std::pair<bool, double>(true, (-dot - sqrt(determinant)) / magnitude_squared);
     }
-    bool is_in_frustum(point bounding[4]) override{
+    bool is_in_frustum(std::vector<std::vector<point>> plane) override{
         //FOR A LINE
         //magnitude(cross(A - B, C - B)) 
         //divided by magnitude(C - B)
         //so let j = C - B, sqrt(cross(A - B, j)^2 / (j.x * j.x + j.y * j.y + j.z * j.z))
         
         //if( < radius * radius)
-        point plane[3]{bounding[0], bounding[2], /* any number*/ 0.5 * bounding[0]};
-        for(point& i : plane) i -= center;
-        
-        vector a = plane[1] - plane[0], b = plane[2] - plane[0];
-        double i = a.y * b.z - a.z * b.y,
-               j = a.x * b.z - a.z * b.x,
-               k = a.x * b.y - a.y * b.x;
-        double d = i * -plane[0].x + j * -plane[0].y + k * -plane[0].z;
-        return d / (i * i + j * j + k * k) < radius; //for now
+
+        for(int c = 0; c < plane.size(); ++c){
+            for(point& i : plane[c]) i -= center;
+
+            vector a = plane[c][1] - plane[c][0], b = plane[c][2] - plane[c][0];
+            double i = a.y * b.z - a.z * b.y,
+                   j = a.x * b.z - a.z * b.x,
+                   k = a.x * b.y - a.y * b.x;
+            double d = i * -plane[c][0].x + j * -plane[c][0].y + k * -plane[c][0].z;
+
+            //todo: its always printing the same result
+            std::cout << d / (i * i + j * j + k * k) << '\n';
+            if(d / (i * i + j * j + k * k) < radius) return true;
+        }
+
+        return false;
+
+        //bool in = d / (i * i + j * j + k * k) < radius;
+        //return d / (i * i + j * j + k * k) < radius; //for now
+        //return in;
+        //return true;
     }
 };
 vector cross_product(vector a, vector b){
@@ -179,7 +191,7 @@ struct polygon : public object{
                     inside = !inside;
         return std::pair<bool, double>(inside, distance);
     }
-    bool is_in_frustum(point bounding[4]) override{
+    bool is_in_frustum(std::vector<std::vector<point>> plane) override{
         return true; // for now
     }
 private:
@@ -221,13 +233,14 @@ struct doughnut : public object{
         long double discriminant = 256 * e * e * e - 192 * b * d * e * e - 128 * c * c * e * e + 144 * c * d * d * e - 27 * d * d * d *d + 144 * b * b * c * e * e - 6 * b * b * d * d * e - 80 * b * c * c * d * e + 18 * b * c * d * d * d + 16 * c * c * c * c * e - 4 * c * c * c * d * d - 27 * b * b * b * b * e * e + 18 * b * b * b * c * d * e - 4 * b * b * b * d * d * d - 4 * b * b * c * c * c * e + b * b * c * c * d * d;
         long double p = 8 * c - 3 * b * b;
         long double g = 64 * e - 16 * c * c + 16 * b * b * c - 16 * b * d - 3 * b * b * b * b;
+        //todo: find the distance instead of just putting 100
         if(discriminant < 0) return std::pair<bool, double>(true, 100);
         if(!discriminant) return std::pair<bool, double>(!(!g && p > 0 && b * b * b + 8 * d - 4 * b * c), 100);
         //if(discriminant > 0)
         //return std::pair<bool, double>(!(p > 0 || g > 0), 100);
         return std::pair<bool, double>(p < 0 && g < 0, 100);
     }
-    bool is_in_frustum(point bounding[4]) override{
+    bool is_in_frustum(std::vector<std::vector<point>> plane) override{
         return true; //for now
     }
 private:
@@ -254,15 +267,58 @@ std::function<void()> render =
     //todo: use the gpu for calculations
     //magnitude(cross(A - B, C - B)) 
     //divided by magnitude(C - B)
-	std::vector<object*> can_hit = std::move(world); // copy
+	std::vector<object*> can_hit = world; // copy
     point bounding[4]{
         point(0, height / 2.0, z), //upper left
         point(width / 2.0, height / 2.0, z), //upper right
         point(0, 0, z), //bottom left
         point(width / 2.0, 0, z) //bottom right
     };
-    //todo: rotate the points by yaw pitch and roll, during initialization or after
-    can_hit.erase(std::remove_if(can_hit.begin(), can_hit.end(), [](object* i){return !(*i)->is_in_frustum(bounding);}));
+    //todo: rotate the bounding points by yaw pitch and roll, during initialization or after
+
+    for(point& i : bounding){
+        double &vx = i.x, &vy = i.y, &vz = i.z;
+        if(yaw_angle_radians){
+            double cos_yar = cos(yaw_angle_radians), sin_yar = sin(yaw_angle_radians), sin_yar_vx = sin_yar * vx;
+            vx = cos_yar * vx + sin_yar * vz;
+            vz = -sin_yar_vx + cos_yar * vz;
+        }
+        if(pitch_angle_radians){
+            //double temp = vx;
+            //vx = cos(pitch_angle_radians) * vx + sin(pitch_angle_radians) * vz;
+            //vz = -sin(pitch_angle_radians) * temp + cos(pitch_angle_radians) * vz;
+            //vy += vz * sin(pitch_angle_radians);
+
+            double cos_par = cos(pitch_angle_radians), sin_par = sin(pitch_angle_radians), sin_par_vy = sin_par * vy;
+            vy = cos_par * vy - sin_par * vz;
+            vz = sin_par_vy + cos_par * vz;
+
+            //todo: update pitch to something instead of this
+            //vy += vz * sin(pitch_angle_radians);
+        }
+        if(roll_angle_radians){
+            //double temp = vy;
+            //vy = cos(roll_angle_radians) * vy - sin(roll_angle_radians) * vz;
+            //vz = sin(roll_angle_radians) * temp + cos(roll_angle_radians) * vz;
+            double cos_rar = cos(roll_angle_radians), sin_rar = sin(roll_angle_radians), sin_rar_vx = sin_rar * vx;
+            vx = cos_rar * vx - sin_rar * vy;
+            vy = sin_rar_vx + cos_rar * vy;
+        }
+    }
+    constexpr double scaler = 0.5; // any number that isn't 1
+    std::vector<std::vector<point>> plane{
+        {bounding[0], bounding[2], bounding[0] * scaler}, //left
+        {bounding[1], bounding[3], bounding[1] * scaler}, //right
+        {bounding[0], bounding[1], bounding[0] * scaler}, //top
+        {bounding[2], bounding[3], bounding[2] * scaler}, //bottom
+    };
+    //todo: in is_in_frustum() for every object, create polygons, find the distance to either the center or all points, and check if any part of the shape is inside
+    #if __cplusplus >= 202002L
+        std::erase_if(can_hit, [&plane](object* i){return !i->is_in_frustum(plane);});
+    #else
+        can_hit.erase(std::remove_if(can_hit.begin(), can_hit.end(), [&plane](object* i){return !i->is_in_frustum(plane);}), can_hit.end());
+    #endif
+
     ++f;
     //todo: start from upper left instead
     for(int j = height - 1; j >= 0; --j){
@@ -328,6 +384,7 @@ std::function<void()> render =
 , resize =
 [](){
     z = width / (2 * tan(horizontal_fov / 2));
+    vertical_fov = atan(tan(height / 2.0) * height / width);
 };
 LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
     static HDC pdc;
