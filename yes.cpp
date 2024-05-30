@@ -102,8 +102,8 @@ struct sphere : public object{
             double d = i * -plane[c][0].x + j * -plane[c][0].y + k * -plane[c][0].z;
 
             //todo: its always printing the same result
-            std::cout << d / (i * i + j * j + k * k) << '\n';
-            if(d / (i * i + j * j + k * k) < radius) return true;
+            std::cout << d / sqrt(i * i + j * j + k * k) << '\n';
+            if(d / sqrt(i * i + j * j + k * k) < radius) return true;
         }
 
         return false;
