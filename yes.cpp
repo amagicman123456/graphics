@@ -59,6 +59,12 @@ struct point{
 };
 typedef uint32_t color;
 typedef point vector;
+vector cross_product(vector a, vector b){
+    return vector(a.y * b.z - b.y * a.z, a.z * b.x - b.z * a.x, a.x * b.y - b.x * a.y);
+}
+inline double dot_product(vector a, vector b){
+    return a.x * b.x + a.y * b.y + a.z * b.z;
+}
 struct object{
     virtual std::pair<bool, double> hit(vector u) = 0;
     virtual bool is_in_frustum(std::vector<std::vector<point>> plane) = 0;
@@ -74,7 +80,8 @@ struct sphere : public object{
         //this will be in render instead
         //todo: do the same thing for u.x and u.y
         //todo: also fast reject if sphere is not in field of view
-        //if((u.z > 0 && center.z < radius) || (u.z < 0 && center.z > radius)) return std::pair<bool, double>(false, 0);
+        //here for funny
+        if((u.z > 0 && center.z < radius) || (u.z < 0 && center.z > radius)) return std::pair<bool, double>(false, 0);
         //magnitude(cross(A - B, C - B)) 
         //divided by magnitude(C - B)
         double magnitude_squared = u.x * u.x + u.y * u.y + u.z * u.z;
@@ -92,10 +99,12 @@ struct sphere : public object{
         
         //if( < radius * radius)
 
-        for(int c = 0; c < plane.size(); ++c){
+        for(int c = 0; c < (int)plane.size(); ++c){
+            /*
             for(point& i : plane[c]) i -= center;
 
             vector a = plane[c][1] - plane[c][0], b = plane[c][2] - plane[c][0];
+            // literally just the cross product btw
             double i = a.y * b.z - a.z * b.y,
                    j = a.x * b.z - a.z * b.x,
                    k = a.x * b.y - a.y * b.x;
@@ -104,9 +113,22 @@ struct sphere : public object{
             //todo: its always printing the same result
             std::cout << d / sqrt(i * i + j * j + k * k) << '\n';
             if(d / sqrt(i * i + j * j + k * k) < radius) return true;
-        }
+            */
 
+            //check which side its on first
+            vector a = plane[c][1] - plane[c][0], b = plane[c][2] - plane[c][0], cross = cross_product(a, b);
+
+            double cross_mag = sqrt(cross.x * cross.x + cross.y * cross.y + cross.z * cross.z);
+            cross.x /= cross_mag, cross.y /= cross_mag, cross.z /= cross_mag;
+
+            //double distance = dot_product(cross, center);
+            //std::cout << c << ": " << distance << '\n';
+
+            if(abs(dot_product(cross, center)) < radius){std::cout << "tru moo\n"; return true;}
+        }
         return false;
+
+        //return false;
 
         //bool in = d / (i * i + j * j + k * k) < radius;
         //return d / (i * i + j * j + k * k) < radius; //for now
@@ -114,9 +136,6 @@ struct sphere : public object{
         //return true;
     }
 };
-vector cross_product(vector a, vector b){
-    return vector(a.y * b.z - b.y * a.z, a.z * b.x - b.z * a.x, a.x * b.y - b.x * a.y);
-}
 struct polygon : public object{
     std::vector<point> points{};
     polygon(color cl, auto... l) try /*: clr(cl)*/{
@@ -137,10 +156,12 @@ struct polygon : public object{
         //this will be in render instead
         //todo: do the same thing for u.x and u.y
         //todo: also fast reject if polygon is not in field of view
-        //for(point& i : points)
-        //    if((u.z < 0 && i.z < 0) || (u.z > 0 && i.z > 0)) goto polygon_start;
-        //return std::pair<bool, double>(false, 0);
-        //polygon_start:
+        //here for funny
+        for(point& i : points)
+            if((u.z < 0 && i.z < 0) || (u.z > 0 && i.z > 0)) goto polygon_start;
+        return std::pair<bool, double>(false, 0);
+        polygon_start:
+
         double e = u.x * c.x + u.y * c.y + u.z * c.z;
         double t = k / e;
         if(likely(!e || (u.z * t < 0))) return std::pair<bool, double>(false, 0);
@@ -219,11 +240,21 @@ struct doughnut : public object{
         {
             long double _a = -center.x, _b = u.x, _c = -center.y, _d = u.y, _e = -center.z, _f = u.z;
 
-            a = _b*_b*_b*_b + 2*_b*_b*_d*_d + _d*_d*_d*_d + _f*_f*_f*_f + 2*_b*_b*_f*_f + 2*_d*_d*_f*_f;
-            b = 4*_a*_b*_b*_b + 4*_a*_b*_d*_d + 4*_b*_b*_c*_d + 4*_c*_d*_d*_d + 4*_e*_f*_f*_f + 4*_a*_b*_f*_f + 4*_e*_b*_b*_f + 4*_c*_d*_f*_f + 4*_e*_d*_d*_f;
-            c = 6*_a*_a*_b*_b + 2*_a*_a*_d*_d + 8*_a*_b*_c*_d + 2*_b*_b*_c*_c + 6*_c*_c*_d*_d * 6*_e*_e*_f*_f + 2*_a*_a*_f*_f + 8*_e*_a*_b*_f + 2*_e*_e*_b*_b + 2*_c*_c*_f*_f + 8*_e*_c*_d*_f + 2*_e*_e*_d*_d + 2*epsilon*_b*_b + 2*epsilon*_d*_d + 2*epsilon*_f*_f - 4*major_radius*major_radius*_b*_b - 4*major_radius*major_radius*_d*_d;
-            d = 4*_a*_a*_a*_b + 4*_a*_a*_c*_d + 4*_a*_b*_c*_c + 4*_c*_c*_c*_d + 4*_e*_e*_e*_f + 4*_e*_e*_a*_b + 4*_e*_c*_c*_f + 4*_e*_e*_c*_d + 4*epsilon*_a*_b + 4*epsilon*_c*_d + 4*_e*epsilon*_f - 8*major_radius*major_radius*_a*_b - 8*major_radius*major_radius*_c*_d;
-            e = _a*_a*_a*_a + 2*_a*_a*_c*_c + _c*_c*_c*_c + _e*_e*_e*_e + epsilon*epsilon + 2*_e*_e*_a*_a + 2*_e*_e*_c*_c + 2*epsilon*_a*_a + 2*epsilon*_c*_c + 2*_e*_e*epsilon - 4*major_radius*major_radius*_a*_a - 4*major_radius*major_radius*_c*_c;
+            #define SIMPLIFY_DOUGHNUT
+
+            #ifdef SIMPLIFY_DOUGHNUT
+                a = square(_b * _b + _d * _d + _f * _f);
+                b = 4*(_a*_b*_b*_b + _a*_b*_d*_d + _b*_b*_c*_d + _c*_d*_d*_d + _e*_f*_f*_f + _a*_b*_f*_f + _e*_b*_b*_f + _c*_d*_f*_f + _e*_d*_d*_f);
+                c = 2*(3*_a*_a*_b*_b + _a*_a*_d*_d + 4*_a*_b*_c*_d + _b*_b*_c*_c + 3*_c*_c*_d*_d * 3*_e*_e*_f*_f + _a*_a*_f*_f + 4*_e*_a*_b*_f + _e*_e*_b*_b + _c*_c*_f*_f + 4*_e*_c*_d*_f + _e*_e*_d*_d + epsilon*_b*_b + epsilon*_d*_d + epsilon*_f*_f - 2*major_radius*major_radius*_b*_b - 2*major_radius*major_radius*_d*_d);
+                d = 4*(_a*_a*_a*_b + _a*_a*_c*_d + _a*_b*_c*_c + _c*_c*_c*_d + _e*_e*_e*_f + _e*_e*_a*_b + _e*_c*_c*_f + _e*_e*_c*_d + epsilon*_a*_b + epsilon*_c*_d + _e*epsilon*_f - 2*major_radius*major_radius*_a*_b - 2*major_radius*major_radius*_c*_d);
+                e = _a*_a*_a*_a + 2*_a*_a*_c*_c + _c*_c*_c*_c + _e*_e*_e*_e + epsilon*epsilon + 2*_e*_e*_a*_a + 2*_e*_e*_c*_c + 2*epsilon*_a*_a + 2*epsilon*_c*_c + 2*_e*_e*epsilon - 4*major_radius*major_radius*_a*_a - 4*major_radius*major_radius*_c*_c;
+            #else
+                a = _b*_b*_b*_b + 2*_b*_b*_d*_d + _d*_d*_d*_d + _f*_f*_f*_f + 2*_b*_b*_f*_f + 2*_d*_d*_f*_f;
+                b = 4*_a*_b*_b*_b + 4*_a*_b*_d*_d + 4*_b*_b*_c*_d + 4*_c*_d*_d*_d + 4*_e*_f*_f*_f + 4*_a*_b*_f*_f + 4*_e*_b*_b*_f + 4*_c*_d*_f*_f + 4*_e*_d*_d*_f;
+                c = 6*_a*_a*_b*_b + 2*_a*_a*_d*_d + 8*_a*_b*_c*_d + 2*_b*_b*_c*_c + 6*_c*_c*_d*_d * 6*_e*_e*_f*_f + 2*_a*_a*_f*_f + 8*_e*_a*_b*_f + 2*_e*_e*_b*_b + 2*_c*_c*_f*_f + 8*_e*_c*_d*_f + 2*_e*_e*_d*_d + 2*epsilon*_b*_b + 2*epsilon*_d*_d + 2*epsilon*_f*_f - 4*major_radius*major_radius*_b*_b - 4*major_radius*major_radius*_d*_d;
+                d = 4*_a*_a*_a*_b + 4*_a*_a*_c*_d + 4*_a*_b*_c*_c + 4*_c*_c*_c*_d + 4*_e*_e*_e*_f + 4*_e*_e*_a*_b + 4*_e*_c*_c*_f + 4*_e*_e*_c*_d + 4*epsilon*_a*_b + 4*epsilon*_c*_d + 4*_e*epsilon*_f - 8*major_radius*major_radius*_a*_b - 8*major_radius*major_radius*_c*_d;
+                e = _a*_a*_a*_a + 2*_a*_a*_c*_c + _c*_c*_c*_c + _e*_e*_e*_e + epsilon*epsilon + 2*_e*_e*_a*_a + 2*_e*_e*_c*_c + 2*epsilon*_a*_a + 2*epsilon*_c*_c + 2*_e*_e*epsilon - 4*major_radius*major_radius*_a*_a - 4*major_radius*major_radius*_c*_c;
+            #endif
         }
         b /= a;
         c /= a;
@@ -269,10 +300,10 @@ std::function<void()> render =
     //divided by magnitude(C - B)
 	std::vector<object*> can_hit = world; // copy
     point bounding[4]{
-        point(0, height / 2.0, z), //upper left
+        point(-width / 2.0, height / 2.0, z), //upper left
         point(width / 2.0, height / 2.0, z), //upper right
-        point(0, 0, z), //bottom left
-        point(width / 2.0, 0, z) //bottom right
+        point(-width / 2.0, -height / 2.0, z), //bottom left
+        point(width / 2.0, -height / 2.0, z) //bottom right
     };
     //todo: rotate the bounding points by yaw pitch and roll, during initialization or after
 
@@ -305,7 +336,7 @@ std::function<void()> render =
             vy = sin_rar_vx + cos_rar * vy;
         }
     }
-    constexpr double scaler = 0.5; // any number that isn't 1
+    constexpr double scaler = 0.5; // any number that isn't 1, maybe just change it to 0 idk
     std::vector<std::vector<point>> plane{
         {bounding[0], bounding[2], bounding[0] * scaler}, //left
         {bounding[1], bounding[3], bounding[1] * scaler}, //right
