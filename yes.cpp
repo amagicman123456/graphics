@@ -19,9 +19,8 @@ void fps(void*){
         f = 0;
 
         //yaw_angle_radians = yaw_angle_radians + 0.175;
-        //pitch_angle_radians = (!pitch_angle_radians) * 0.175;
         pitch_angle_radians = pitch_angle_radians + 0.175;
-        //roll_angle_radians = (!roll_angle_radians) * 0.35;
+        //roll_angle_radians = roll_angle_radians + 0.175;
     }
 }
 int width = 1200, height = 600, tick_count, *framebuf;
