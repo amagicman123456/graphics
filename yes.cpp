@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <iostream>
 #include <atomic>
-#include <memory>
+//#include <memory>
 #include <vector>
 #include <cmath>
 #define likely(x) __builtin_expect(!!(x), 1)
@@ -126,7 +126,13 @@ struct sphere : public object{
             //if its positive its facing the same direction as the cross product
             //if its negative its facing the opposite
             //right hand rule for cross product btw
-            if(abs(dot_product(cross, center)) < radius){std::cout << "tru moo\n"; return true;}
+
+            //erm probably remove this
+			//double t = -cross.x * center.x - cross.y * center.y - cross.z * center.z;
+			//if(t * cross.x - center.x < radius){std::cout << "tru moo flat\n"; return true;}
+			double distance = dot_product(cross, center);
+			//if(distance < 0 || distance < radius){std::cout << "tru moo\n"; return true;}
+            if(abs(distance) < radius){std::cout << "tru moo: " << distance << '\n'; return true;}
         }
         return false;
 
