@@ -4,7 +4,6 @@
 #include <algorithm>
 #include <iostream>
 #include <atomic>
-//#include <memory>
 #include <vector>
 #include <cmath>
 #define likely(x) __builtin_expect(!!(x), 1)
