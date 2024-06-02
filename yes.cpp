@@ -130,6 +130,7 @@ struct sphere : public object{
             //erm probably remove this
 			//double t = -cross.x * center.x - cross.y * center.y - cross.z * center.z;
 			//if(t * cross.x - center.x < radius){std::cout << "tru moo flat\n"; return true;}
+
 			double distance = dot_product(cross, center);
 			//if(distance < 0 || distance < radius){std::cout << "tru moo\n"; return true;}
             if(abs(distance) < radius){std::cout << "tru moo: " << distance << '\n'; return true;}
