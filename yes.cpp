@@ -34,11 +34,11 @@ inline double greater(double a, double b){
 inline double abs_val(double a){
     return a < 0 ? -a : a;
 }
-//no need for this ig
+//no need for this i
 /*
 inline double dot_product(double ax, double ay, double az, double bx, double by, double bz){
     return ax * bx + ay * by + az * bz;
-}
+
 */
 struct point{
     double x, y, z;
@@ -326,8 +326,6 @@ double z = width / (2 * tan(horizontal_fov / 2));
 std::function<void()> render =
 [](){
     //todo: use the gpu for calculations
-    //magnitude(cross(A - B, C - B)) 
-    //divided by magnitude(C - B)
 	std::vector<object*> can_hit = world; // copy
     point bounding[4]{
         point(-width / 2.0, height / 2.0, z), //upper left
