@@ -80,10 +80,8 @@ struct sphere : public object{
     sphere(color cl, double r, point c) : radius(r), center(c){set_color(cl);}
     virtual void set_color(color c){clr = c;}
     std::pair<bool, double> hit(vector u) override{
-        //this will be in render instead
         //todo: do the same thing for u.x and u.y
         //todo: also fast reject if sphere is not in field of view
-        //here for funny
         if((u.z > 0 && center.z < radius) || (u.z < 0 && center.z > radius)) return std::pair<bool, double>(false, 0);
 		
         double magnitude_squared = u.x * u.x + u.y * u.y + u.z * u.z;
@@ -165,10 +163,8 @@ struct polygon : public object{
         p.z = greatest;
     };
     std::pair<bool, double> hit(vector u) override{
-        //this will be in render instead
         //todo: do the same thing for u.x and u.y
         //todo: also fast reject if polygon is not in field of view
-        //here for funny
         for(point& i : points)
             if((u.z < 0 && i.z < 0) || (u.z > 0 && i.z > 0)) goto polygon_start;
         return std::pair<bool, double>(false, 0);
