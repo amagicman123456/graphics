@@ -115,7 +115,6 @@ struct sphere : public object{
             if(d / sqrt(i * i + j * j + k * k) < radius) return true;
             */
 
-            //check which side its on first
             vector a = plane[c][1] - plane[c][0], b = plane[c][2] - plane[c][0], cross = cross_product(a, b);
 
             double cross_mag = sqrt(cross.x * cross.x + cross.y * cross.y + cross.z * cross.z);
@@ -124,11 +123,12 @@ struct sphere : public object{
             //double distance = dot_product(cross, center);
             //std::cout << c << ": " << distance << '\n';
 
+            //if its positive its facing the same direction as the cross product
+            //if its negative its facing the opposite
+            //right hand rule for cross product btw
             if(abs(dot_product(cross, center)) < radius){std::cout << "tru moo\n"; return true;}
         }
         return false;
-
-        //return false;
 
         //bool in = d / (i * i + j * j + k * k) < radius;
         //return d / (i * i + j * j + k * k) < radius; //for now
@@ -343,7 +343,7 @@ std::function<void()> render =
         {bounding[0], bounding[1], bounding[0] * scaler}, //top
         {bounding[2], bounding[3], bounding[2] * scaler}, //bottom
     };
-    //todo: in is_in_frustum() for every object, create polygons, find the distance to either the center or all points, and check if any part of the shape is inside
+    //todo: in is_in_frustum() for every object, find the distance from either the center or all points to each plane, and check if any part of the shape is inside
     #if __cplusplus >= 202002L
         std::erase_if(can_hit, [&plane](object* i){return !i->is_in_frustum(plane);});
     #else
@@ -352,6 +352,7 @@ std::function<void()> render =
 
     ++f;
     //todo: start from upper left instead
+    //todo: increment vx, vy, and vz by the appropriate amount starting from the top left
     for(int j = height - 1; j >= 0; --j){
         for(int i = 0; i < width; ++i){
             double vx = -width / 2.0 + i;
