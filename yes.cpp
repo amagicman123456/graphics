@@ -20,7 +20,6 @@ void fps(void*){
         f = 0;
 
         //yaw_angle_radians = yaw_angle_radians + 0.175;
-        //if(yaw_angle_radians > 6.28) yaw_angle_radians = 0;
         //pitch_angle_radians = (!pitch_angle_radians) * 0.175;
         pitch_angle_radians = pitch_angle_radians + 0.175;
         //roll_angle_radians = (!roll_angle_radians) * 0.35;
