@@ -35,9 +35,11 @@ inline double abs_val(double a){
     return a < 0 ? -a : a;
 }
 //no need for this ig
+/*
 inline double dot_product(double ax, double ay, double az, double bx, double by, double bz){
     return ax * bx + ay * by + az * bz;
 }
+*/
 struct point{
     double x, y, z;
     point() : x(0), y(0), z(0){}
