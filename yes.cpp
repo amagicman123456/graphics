@@ -34,11 +34,11 @@ inline double greater(double a, double b){
 inline double abs_val(double a){
     return a < 0 ? -a : a;
 }
-//no need for this ig
+//no need for this i
 /*
 inline double dot_product(double ax, double ay, double az, double bx, double by, double bz){
     return ax * bx + ay * by + az * bz;
-}
+
 */
 struct point{
     double x, y, z;
