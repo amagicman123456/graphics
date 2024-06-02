@@ -34,6 +34,7 @@ inline double greater(double a, double b){
 inline double abs_val(double a){
     return a < 0 ? -a : a;
 }
+//no need for this ig
 inline double dot_product(double ax, double ay, double az, double bx, double by, double bz){
     return ax * bx + ay * by + az * bz;
 }
@@ -41,6 +42,9 @@ struct point{
     double x, y, z;
     point() : x(0), y(0), z(0){}
     point(double e, double f, double g) : x(e), y(f), z(g){}
+	point operator-(){
+		return point(-x, -y, -z);
+	}
     point operator-(point f){
         return point(x - f.x, y - f.y, z - f.z);
     }
@@ -56,7 +60,7 @@ struct point{
 };
 typedef uint32_t color;
 typedef point vector;
-vector cross_product(vector a, vector b){
+inline vector cross_product(vector a, vector b){
     return vector(a.y * b.z - b.y * a.z, a.z * b.x - b.z * a.x, a.x * b.y - b.x * a.y);
 }
 inline double dot_product(vector a, vector b){
@@ -79,15 +83,17 @@ struct sphere : public object{
         //todo: also fast reject if sphere is not in field of view
         //here for funny
         if((u.z > 0 && center.z < radius) || (u.z < 0 && center.z > radius)) return std::pair<bool, double>(false, 0);
-        //magnitude(cross(A - B, C - B)) 
-        //divided by magnitude(C - B)
+		
         double magnitude_squared = u.x * u.x + u.y * u.y + u.z * u.z;
-        double dot = dot_product(u.x, u.y, u.z, center.x, center.y, center.z);
-        double determinant = dot * dot - magnitude_squared * (center.x * center.x + center.y * center.y + center.z * center.z - radius * radius);
+        //double dot = dot_product(u.x, u.y, u.z, center.x, center.y, center.z);
+		double dot = dot_product(u, -center);
+		double determinant = dot * dot - magnitude_squared * (center.x * center.x + center.y * center.y + center.z * center.z - radius * radius);
         // if determinant < 0 you can't sqrt it
         if(determinant < 0) return std::pair<bool, double>(false, 0);
+		//std::cout << (-dot + sqrt(determinant)) / magnitude_squared << '\n';
+		//todo: provide correct distance
         return std::pair<bool, double>(true, (-dot - sqrt(determinant)) / magnitude_squared);
-    }
+	}
     bool is_in_frustum(std::vector<std::vector<point>> plane) override{
         //FOR A LINE
         //magnitude(cross(A - B, C - B)) 
@@ -234,7 +240,29 @@ struct doughnut : public object{
     std::pair<bool, double> hit(vector u) override{
         u -= center;
         //todo: rotate u by the matrix which is the product of the negative pitch_rad matrix and the negative roll_rad matrix
+		{
+			if(pitch_rad){
+				//double temp = vx;
+				//vx = cos(pitch_angle_radians) * vx + sin(pitch_angle_radians) * u.z;
+				//u.z = -sin(pitch_angle_radians) * temp + cos(pitch_angle_radians) * vz;
+				//u.y += u.z * sin(pitch_angle_radians);
 
+				double cos_par = cos(-pitch_rad), sin_par = sin(-pitch_rad), sin_par_y = sin_par * u.y;
+				u.y = cos_par * u.y - sin_par * u.z;
+				u.z = sin_par_y + cos_par * u.z;
+
+				//todo: update pitch to something instead of this
+				//u.y += u.z * sin(pitch_angle_radians);
+			}
+			if(roll_rad){
+				//double temp = u.y;
+				//u.y = cos(roll_angle_radians) * vy - sin(roll_angle_radians) * u.z;
+				//u.z = sin(roll_angle_radians) * temp + cos(roll_angle_radians) * vz;
+				double cos_rar = cos(-roll_rad), sin_rar = sin(-roll_rad), sin_rar_x = sin_rar * u.x;
+				u.x = cos_rar * u.x - sin_rar * u.y;
+				u.y = sin_rar_x + cos_rar * u.y;
+			}
+		}
         //this will be in render
         //todo: then instantly return false if donut is not in field of view
         double magnitude = sqrt(u.x * u.x + u.y * u.y + u.z * u.z);
@@ -284,7 +312,7 @@ private:
 
 sphere s(RGB(0, 0, 255), sqrt(100000), point(100, 41.5, 2000));
 //doughnut d(RGB(0, 255, 0), 200, 300, point(100, 100, 5000));
-doughnut d(RGB(255, 0, 255), 60, 90, point(0, 0, 0));
+doughnut d(RGB(255, 0, 255), 60, 90, point(0, 0, 0)/*, 1.57*/);
 point a(-250, -300, 2400), b(250, 200, 1500), c(350, -100, 1000)
 #ifdef QUAD
     , d(-250, -100, 2000)
@@ -314,30 +342,30 @@ std::function<void()> render =
     for(point& i : bounding){
         double &vx = i.x, &vy = i.y, &vz = i.z;
         if(yaw_angle_radians){
-            double cos_yar = cos(yaw_angle_radians), sin_yar = sin(yaw_angle_radians), sin_yar_vx = sin_yar * vx;
-            vx = cos_yar * vx + sin_yar * vz;
-            vz = -sin_yar_vx + cos_yar * vz;
+            double cos_yar = cos(yaw_angle_radians), sin_yar = sin(yaw_angle_radians), sin_yar_x = sin_yar * i.x;
+            i.x = cos_yar * i.x + sin_yar * i.z;
+            i.z = -sin_yar_x + cos_yar * i.z;
         }
         if(pitch_angle_radians){
-            //double temp = vx;
-            //vx = cos(pitch_angle_radians) * vx + sin(pitch_angle_radians) * vz;
-            //vz = -sin(pitch_angle_radians) * temp + cos(pitch_angle_radians) * vz;
-            //vy += vz * sin(pitch_angle_radians);
+            //double temp = i.x;
+            //i.x = cos(pitch_angle_radians) * i.x + sin(pitch_angle_radians) * i.z;
+            //i.z = -sin(pitch_angle_radians) * temp + cos(pitch_angle_radians) * i.z;
+            //i.y += i.z * sin(pitch_angle_radians);
 
-            double cos_par = cos(pitch_angle_radians), sin_par = sin(pitch_angle_radians), sin_par_vy = sin_par * vy;
-            vy = cos_par * vy - sin_par * vz;
-            vz = sin_par_vy + cos_par * vz;
+            double cos_par = cos(pitch_angle_radians), sin_par = sin(pitch_angle_radians), sin_par_y = sin_par * i.y;
+            i.y = cos_par * i.y - sin_par * i.z;
+            i.z = sin_par_y + cos_par * i.z;
 
             //todo: update pitch to something instead of this
-            //vy += vz * sin(pitch_angle_radians);
+            //i.y += i.z * sin(pitch_angle_radians);
         }
         if(roll_angle_radians){
-            //double temp = vy;
-            //vy = cos(roll_angle_radians) * vy - sin(roll_angle_radians) * vz;
-            //vz = sin(roll_angle_radians) * temp + cos(roll_angle_radians) * vz;
-            double cos_rar = cos(roll_angle_radians), sin_rar = sin(roll_angle_radians), sin_rar_vx = sin_rar * vx;
-            vx = cos_rar * vx - sin_rar * vy;
-            vy = sin_rar_vx + cos_rar * vy;
+            //double temp = i.y;
+            //i.y = cos(roll_angle_radians) * i.y - sin(roll_angle_radians) * i.z;
+            //i.z = sin(roll_angle_radians) * temp + cos(roll_angle_radians) * i.z;
+            double cos_rar = cos(roll_angle_radians), sin_rar = sin(roll_angle_radians), sin_rar_x = sin_rar * i.x;
+            i.x = cos_rar * i.x - sin_rar * i.y;
+            i.y = sin_rar_x + cos_rar * i.y;
         }
     }
     constexpr double scaler = 0.5; // any number that isn't 1, maybe just change it to 0 idk
