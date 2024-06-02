@@ -244,9 +244,9 @@ struct doughnut : public object{
         {
             long double _a = -center.x, _b = u.x, _c = -center.y, _d = u.y, _e = -center.z, _f = u.z;
 
-            #define SIMPLIFY_DOUGHNUT
+            #define simplify_donut
 
-            #ifdef SIMPLIFY_DOUGHNUT
+            #ifdef simplify_donut
                 a = square(_b * _b + _d * _d + _f * _f);
                 b = 4*(_a*_b*_b*_b + _a*_b*_d*_d + _b*_b*_c*_d + _c*_d*_d*_d + _e*_f*_f*_f + _a*_b*_f*_f + _e*_b*_b*_f + _c*_d*_f*_f + _e*_d*_d*_f);
                 c = 2*(3*_a*_a*_b*_b + _a*_a*_d*_d + 4*_a*_b*_c*_d + _b*_b*_c*_c + 3*_c*_c*_d*_d * 3*_e*_e*_f*_f + _a*_a*_f*_f + 4*_e*_a*_b*_f + _e*_e*_b*_b + _c*_c*_f*_f + 4*_e*_c*_d*_f + _e*_e*_d*_d + epsilon*_b*_b + epsilon*_d*_d + epsilon*_f*_f - 2*major_radius*major_radius*_b*_b - 2*major_radius*major_radius*_d*_d);
