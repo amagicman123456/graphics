@@ -436,7 +436,7 @@ std::function<void()> render =
                 }
                 else hit_nothing = !hit_b.first;
             }
-            if(likely(hit_nothing)) framebuf[j * width + i] = RGB(255, 0, 0);
+            if(likely(hit_nothing)) framebuf[j * width + i] = RGB(255, 255, 255);//RGB(255, 0, 0);
             else framebuf[j * width + i] = smallest->clr;
         }
     }
