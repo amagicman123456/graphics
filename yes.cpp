@@ -18,8 +18,8 @@ void fps(void*){
         std::cout << f << '\n';
         f = 0;
 
-        //yaw_angle_radians = yaw_angle_radians + 0.175;
-        pitch_angle_radians = pitch_angle_radians + 0.175;
+        yaw_angle_radians = yaw_angle_radians + 0.175;
+        //pitch_angle_radians = pitch_angle_radians + 0.175;
         //roll_angle_radians = roll_angle_radians + 0.175;
     }
 }
@@ -83,7 +83,7 @@ struct sphere : public object{
         //todo: do the same thing for u.x and u.y
         //todo: also fast reject if sphere is not in field of view
         if((u.z > 0 && center.z < radius) || (u.z < 0 && center.z > radius)) return std::pair<bool, double>(false, 0);
-		
+		/*	
         double magnitude_squared = u.x * u.x + u.y * u.y + u.z * u.z;
         //double dot = dot_product(u.x, u.y, u.z, center.x, center.y, center.z);
 		double dot = dot_product(u, -center);
@@ -92,7 +92,16 @@ struct sphere : public object{
         if(determinant < 0) return std::pair<bool, double>(false, 0);
 		//std::cout << (-dot + sqrt(determinant)) / magnitude_squared << '\n';
 		//todo: provide correct distance
+		//std::cout << "-dot: " << -dot << "\n-sqrt determinant: " << -sqrt(determinant) << "\nmagnitude squared: " << magnitude_squared << '\n';
         return std::pair<bool, double>(true, (-dot - sqrt(determinant)) / magnitude_squared);
+		*/
+		//todo: its the correct difference but normalizing requires a sqrt
+		double magnitude = sqrt(u.x * u.x + u.y * u.y + u.z * u.z);
+		u.x /= magnitude, u.y /= magnitude, u.z /= magnitude;
+		double dot = dot_product(u, -center);
+		double determinant = dot * dot - (center.x * center.x + center.y * center.y + center.z * center.z - radius * radius);
+		if(determinant < 0) return std::pair<bool, double>(false, 0);
+		return std::pair<bool, double>(true, -dot - sqrt(determinant));
 	}
     bool is_in_frustum(std::vector<std::vector<point>> plane) override{
         //FOR A LINE
@@ -310,7 +319,7 @@ private:
 
 sphere s(RGB(0, 0, 255), sqrt(100000), point(100, 41.5, 2000));
 //doughnut d(RGB(0, 255, 0), 200, 300, point(100, 100, 5000));
-doughnut d(RGB(255, 0, 255), 60, 90, point(0, 0, 0)/*, 1.57*/);
+doughnut d(RGB(255, 0, 255), 90, 1500, point(0, 0, 0), 1.57);
 point a(-250, -300, 2400), b(250, 200, 1500), c(350, -100, 1000)
 #ifdef QUAD
     , d(-250, -100, 2000)
