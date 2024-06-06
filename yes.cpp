@@ -246,19 +246,18 @@ struct doughnut : public object{
     virtual void set_color(color c){clr = c;}
     std::pair<bool, double> hit(vector u) override{
         u -= center;
-        //todo: rotate u by the matrix which is the product of the negative pitch_rad matrix and the negative roll_rad matrix
-		{
+		{ // curly brackets for fun ig
 			if(pitch_rad){
 				//double temp = vx;
 				//vx = cos(pitch_angle_radians) * vx + sin(pitch_angle_radians) * u.z;
 				//u.z = -sin(pitch_angle_radians) * temp + cos(pitch_angle_radians) * vz;
 				//u.y += u.z * sin(pitch_angle_radians);
 
+				//todo: check if pitch is actually correct
 				double cos_par = cos(-pitch_rad), sin_par = sin(-pitch_rad), sin_par_y = sin_par * u.y;
 				u.y = cos_par * u.y - sin_par * u.z;
 				u.z = sin_par_y + cos_par * u.z;
 
-				//todo: update pitch to something instead of this
 				//u.y += u.z * sin(pitch_angle_radians);
 			}
 			if(roll_rad){
@@ -273,8 +272,8 @@ struct doughnut : public object{
         //this will be in render
         //todo: then instantly return false if donut is not in field of view
         double magnitude = sqrt(u.x * u.x + u.y * u.y + u.z * u.z);
-        double big = 10;
-        u.x /= (magnitude * big), u.y /= (magnitude * big), u.z /= (magnitude * big);
+        constexpr double scaler = 1;
+        u.x /= (magnitude * scaler), u.y /= (magnitude * scaler), u.z /= (magnitude * scaler);
         long double a, b, c, d, e;
         {
             long double _a = -center.x, _b = u.x, _c = -center.y, _d = u.y, _e = -center.z, _f = u.z;
@@ -299,7 +298,6 @@ struct doughnut : public object{
         c /= a;
         d /= a;
         e /= a;
-        //std::cout << a << ' ' << b << ' ' << c << ' ' << d << ' ' << e << ' ' << '\n';
         long double discriminant = 256 * e * e * e - 192 * b * d * e * e - 128 * c * c * e * e + 144 * c * d * d * e - 27 * d * d * d *d + 144 * b * b * c * e * e - 6 * b * b * d * d * e - 80 * b * c * c * d * e + 18 * b * c * d * d * d + 16 * c * c * c * c * e - 4 * c * c * c * d * d - 27 * b * b * b * b * e * e + 18 * b * b * b * c * d * e - 4 * b * b * b * d * d * d - 4 * b * b * c * c * c * e + b * b * c * c * d * d;
         long double p = 8 * c - 3 * b * b;
         long double g = 64 * e - 16 * c * c + 16 * b * b * c - 16 * b * d - 3 * b * b * b * b;
@@ -345,7 +343,6 @@ std::function<void()> render =
     //todo: rotate the bounding points by yaw pitch and roll, during initialization or after
 
     for(point& i : bounding){
-        double &vx = i.x, &vy = i.y, &vz = i.z;
         if(yaw_angle_radians){
             double cos_yar = cos(yaw_angle_radians), sin_yar = sin(yaw_angle_radians), sin_yar_x = sin_yar * i.x;
             i.x = cos_yar * i.x + sin_yar * i.z;
@@ -357,11 +354,11 @@ std::function<void()> render =
             //i.z = -sin(pitch_angle_radians) * temp + cos(pitch_angle_radians) * i.z;
             //i.y += i.z * sin(pitch_angle_radians);
 
+			//todo: check if pitch is actually correct
             double cos_par = cos(pitch_angle_radians), sin_par = sin(pitch_angle_radians), sin_par_y = sin_par * i.y;
             i.y = cos_par * i.y - sin_par * i.z;
             i.z = sin_par_y + cos_par * i.z;
 
-            //todo: update pitch to something instead of this
             //i.y += i.z * sin(pitch_angle_radians);
         }
         if(roll_angle_radians){
@@ -373,7 +370,7 @@ std::function<void()> render =
             i.y = sin_rar_x + cos_rar * i.y;
         }
     }
-    constexpr double scaler = 0.5; // any number that isn't 1, maybe just change it to 0 idk
+    constexpr double scaler = 0; // any number that isn't 1, maybe just change it to 0 idk
     std::vector<std::vector<point>> plane{
         {bounding[0], bounding[2], bounding[0] * scaler}, //left
         {bounding[1], bounding[3], bounding[1] * scaler}, //right
