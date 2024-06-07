@@ -18,7 +18,7 @@ void fps(void*){
         std::cout << f << '\n';
         f = 0;
 
-        yaw_angle_radians = yaw_angle_radians + 0.175;
+        //yaw_angle_radians = yaw_angle_radians + 0.175;
         //pitch_angle_radians = pitch_angle_radians + 0.175;
         //roll_angle_radians = roll_angle_radians + 0.175;
     }
@@ -34,11 +34,11 @@ inline double greater(double a, double b){
 inline double abs_val(double a){
     return a < 0 ? -a : a;
 }
-//no need for this i
+//no need for this ig
 /*
 inline double dot_product(double ax, double ay, double az, double bx, double by, double bz){
     return ax * bx + ay * by + az * bz;
-
+}
 */
 struct point{
     double x, y, z;
@@ -209,7 +209,7 @@ struct polygon : public object{
                        w2 = (s4 - w1 * s3) / s1;
                 return std::pair<bool, double>(w1 >= 0 && w2 >= 0 && (w1 + w2) <= 1, distance);
             #else
-                auto sign = [&](point p1, point p2, point p3) -> double{
+                auto sign = [](point p1, point p2, point p3) -> double{
                     return (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y);
                 };
                 double d1 = sign(p, points[0], points[1]),
@@ -500,6 +500,22 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
             DeleteDC(hdc);
             break;
         }
+        case WM_KEYDOWN:
+			switch(w){
+				case 'W': case VK_UP:
+					pitch_angle_radians = pitch_angle_radians - 0.15;
+					break;
+				case 'S': case VK_DOWN:
+					pitch_angle_radians = pitch_angle_radians + 0.15;
+					break;
+				case 'A': case VK_LEFT:
+					yaw_angle_radians = yaw_angle_radians - 0.15;
+					break;
+				case 'D': case VK_RIGHT:
+					yaw_angle_radians = yaw_angle_radians + 0.15;
+					break;
+			}
+        	break;
         case WM_TIMER:
             InvalidateRgn(hwnd, 0, 0);
             UpdateWindow(hwnd);
