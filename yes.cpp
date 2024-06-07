@@ -240,14 +240,21 @@ private:
 struct doughnut : public object{
     point center;
     double minor_radius, major_radius;
-    double pitch_rad, roll_rad;
-    doughnut(color cl, double minor_r, double major_r, point c, double pitch = 0, double roll = 0) :
-        center(c), minor_radius(minor_r), major_radius(major_r), pitch_rad(pitch), roll_rad(roll), epsilon(major_r * major_r - minor_r * minor_r){set_color(cl);}
+    //double pitch_rad, roll_rad;
+    double yaw_rad, pitch_rad;
+    doughnut(color cl, double minor_r, double major_r, point c, double /*pitch*/yaw = 0, double /*roll*/pitch = 0) :
+        center(c), minor_radius(minor_r), major_radius(major_r), /*pitch*/yaw_rad(/*pitch*/yaw), /*roll*/pitch_rad(/*roll*/pitch), epsilon(major_r * major_r - minor_r * minor_r){set_color(cl);}
     virtual void set_color(color c){clr = c;}
     std::pair<bool, double> hit(vector u) override{
-        u -= center;
+        u -= center; // todo: with a center other than the origin the donut does weird things
 		{ // curly brackets for fun ig
-			if(pitch_rad){
+            // it might just be yaw and pitch
+            if(yaw_rad){
+                double cos_yar = cos(-yaw_rad), sin_yar = sin(-yaw_rad), sin_yar_x = sin_yar * u.x:
+                u.x = cos_yar * u.x + sin_yar * u.z;
+                u.z = -sin_yar_x + cos_yar * u.z;
+            }
+            if(pitch_rad){
 				//double temp = vx;
 				//vx = cos(pitch_angle_radians) * vx + sin(pitch_angle_radians) * u.z;
 				//u.z = -sin(pitch_angle_radians) * temp + cos(pitch_angle_radians) * vz;
@@ -260,6 +267,7 @@ struct doughnut : public object{
 
 				//u.y += u.z * sin(pitch_angle_radians);
 			}
+            /*
 			if(roll_rad){
 				//double temp = u.y;
 				//u.y = cos(roll_angle_radians) * vy - sin(roll_angle_radians) * u.z;
@@ -268,6 +276,7 @@ struct doughnut : public object{
 				u.x = cos_rar * u.x - sin_rar * u.y;
 				u.y = sin_rar_x + cos_rar * u.y;
 			}
+            */
 		}
         //this will be in render
         //todo: then instantly return false if donut is not in field of view
@@ -317,7 +326,7 @@ private:
 
 sphere s(RGB(0, 0, 255), sqrt(100000), point(100, 41.5, 2000));
 //doughnut d(RGB(0, 255, 0), 200, 300, point(100, 100, 5000));
-doughnut d(RGB(255, 0, 255), 90, 1500, point(0, 0, 0), 1.57);
+doughnut d(RGB(255, 0, 255), 90, 1500, point(0, 0, 0), 1.57, 1);
 point a(-250, -300, 2400), b(250, 200, 1500), c(350, -100, 1000)
 #ifdef QUAD
     , d(-250, -100, 2000)
