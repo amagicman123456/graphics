@@ -240,7 +240,6 @@ private:
 struct doughnut : public object{
     point center;
     double minor_radius, major_radius;
-    //double pitch_rad, roll_rad;
     double yaw_rad, pitch_rad;
     doughnut(color cl, double minor_r, double major_r, point c, double /*pitch*/yaw = 0, double /*roll*/pitch = 0) :
         center(c), minor_radius(minor_r), major_radius(major_r), /*pitch*/yaw_rad(/*pitch*/yaw), /*roll*/pitch_rad(/*roll*/pitch), epsilon(major_r * major_r - minor_r * minor_r){set_color(cl);}
@@ -248,9 +247,8 @@ struct doughnut : public object{
     std::pair<bool, double> hit(vector u) override{
         u -= center; // todo: with a center other than the origin the donut does weird things
 		{ // curly brackets for fun ig
-            // it might just be yaw and pitch
             if(yaw_rad){
-                double cos_yar = cos(-yaw_rad), sin_yar = sin(-yaw_rad), sin_yar_x = sin_yar * u.x:
+                double cos_yar = cos(-yaw_rad), sin_yar = sin(-yaw_rad), sin_yar_x = sin_yar * u.x;
                 u.x = cos_yar * u.x + sin_yar * u.z;
                 u.z = -sin_yar_x + cos_yar * u.z;
             }
