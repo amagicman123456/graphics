@@ -27,7 +27,7 @@ void fps(void*){
 int width_px = 1200, height_px = 600, tick_count, *framebuf;
 double width = 1, height = height_px / (double)width_px,
        width_inc = width / width_px, height_inc = height / height_px;
-double horizontal_fov = 120, vertical_fov = atan(tan(height_px / 2.0) * height_px / width_px);
+double horizontal_fov = 120, vertical_fov = atan(tan(height_px / 2.0) * height_px / (double)width_px);
 inline double square(double x){
     return x * x;
 }
@@ -345,10 +345,10 @@ std::function<void()> render =
     //todo: use the gpu for calculations
 	std::vector<object*> can_hit = world; // copy
     point bounding[4]{
-        point(-width_px / 2.0, height_px / 2.0, z), //upper left
-        point(width_px / 2.0, height_px / 2.0, z), //upper right
-        point(-width_px / 2.0, -height_px / 2.0, z), //bottom left
-        point(width_px / 2.0, -height_px / 2.0, z) //bottom right
+        point(-width / 2.0, height / 2.0, z), //upper left
+        point(width / 2.0, height / 2.0, z), //upper right
+        point(-width / 2.0, -height / 2.0, z), //bottom left
+        point(width / 2.0, -height / 2.0, z) //bottom right
     };
     //todo: rotate the bounding points by yaw pitch and roll, during initialization or after
 
@@ -399,7 +399,7 @@ std::function<void()> render =
     //todo: increment vx, vy, and vz by the appropriate amount starting from the top left
     int ipx = 0, jpx = height_px - 1;
     for(double j = height - height_inc/*- 1*/; j >= 0 && jpx >= 0; /*--j*/j -= height_inc, --jpx){
-        for(double i = 0; i < width /* 1 */; /*++i*/i += width_inc, ++ipx){
+        for(double i = 0; i < width /* 1 */ && ipx < width_px; /*++i*/i += width_inc, ++ipx){
             //double vx = -width / 2.0 + i;
             //double vy = height / 2.0 - j;
             double vx = -width / 2 + i;
