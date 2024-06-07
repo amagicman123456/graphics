@@ -25,7 +25,7 @@ void fps(void*){
 }
 //int width = 1200, height = 600, tick_count, *framebuf;
 int width_px = 1200, height_px = 600, tick_count, *framebuf;
-double width = 1, height = height_px / width_px,
+double width = 1, height = height_px / (double)width_px,
        width_inc = width / width_px, height_inc = height / height_px;
 double horizontal_fov = 120, vertical_fov = atan(tan(height_px / 2.0) * height_px / width_px);
 inline double square(double x){
@@ -397,8 +397,9 @@ std::function<void()> render =
     ++f;
     //todo: start from upper left instead
     //todo: increment vx, vy, and vz by the appropriate amount starting from the top left
-    for(int j = height /*- 1*/; j >= 0; /*--j*/j -= height_inc){
-        for(int i = 0; i < width /* 1 */; /*++i*/width_inc){
+    int ipx = 0, jpx = height_px - 1;
+    for(double j = height - height_inc/*- 1*/; j >= 0 && jpx >= 0; /*--j*/j -= height_inc, --jpx){
+        for(double i = 0; i < width /* 1 */; /*++i*/i += width_inc, ++ipx){
             //double vx = -width / 2.0 + i;
             //double vy = height / 2.0 - j;
             double vx = -width / 2 + i;
@@ -454,16 +455,16 @@ std::function<void()> render =
                 }
                 else hit_nothing = !hit_b.first;
             }
-            if(likely(hit_nothing)) framebuf[j * width_px + i] = RGB(255, 255, 255);//RGB(255, 0, 0);
-            else framebuf[j * width_px + i] = smallest->clr;
+            if(likely(hit_nothing)) framebuf[jpx * width_px + ipx] = RGB(255, 255, 255);//RGB(255, 0, 0);
+            else framebuf[jpx * width_px + ipx] = smallest->clr;
         }
     }
 }
 , resize =
 [](){
     z = width / (2 * tan(horizontal_fov / 2));
-    vertical_fov = atan(tan(height_px / 2.0) * height_px / width_px);
-    height = height_px / width_px;
+    vertical_fov = atan(tan(height_px / 2.0) * height_px / (double)width_px);
+    height = height_px / (double)width_px;
     width_inc = width / width_px;
     height_inc = height / height_px;
 };
