@@ -23,8 +23,11 @@ void fps(void*){
         //roll_angle_radians = roll_angle_radians + 0.175;
     }
 }
-int width = 1200, height = 600, tick_count, *framebuf;
-double horizontal_fov = 120, vertical_fov = atan(tan(height / 2.0) * height / width);
+//int width = 1200, height = 600, tick_count, *framebuf;
+int width_px = 1200, height_px = 600, tick_count, *framebuf;
+double width = 1, height = height_px / width_px,
+       width_inc = width / width_px, height_inc = height / height_px;
+double horizontal_fov = 120, vertical_fov = atan(tan(height_px / 2.0) * height_px / width_px);
 inline double square(double x){
     return x * x;
 }
@@ -342,10 +345,10 @@ std::function<void()> render =
     //todo: use the gpu for calculations
 	std::vector<object*> can_hit = world; // copy
     point bounding[4]{
-        point(-width / 2.0, height / 2.0, z), //upper left
-        point(width / 2.0, height / 2.0, z), //upper right
-        point(-width / 2.0, -height / 2.0, z), //bottom left
-        point(width / 2.0, -height / 2.0, z) //bottom right
+        point(-width_px / 2.0, height_px / 2.0, z), //upper left
+        point(width_px / 2.0, height_px / 2.0, z), //upper right
+        point(-width_px / 2.0, -height_px / 2.0, z), //bottom left
+        point(width_px / 2.0, -height_px / 2.0, z) //bottom right
     };
     //todo: rotate the bounding points by yaw pitch and roll, during initialization or after
 
@@ -394,10 +397,12 @@ std::function<void()> render =
     ++f;
     //todo: start from upper left instead
     //todo: increment vx, vy, and vz by the appropriate amount starting from the top left
-    for(int j = height - 1; j >= 0; --j){
-        for(int i = 0; i < width; ++i){
-            double vx = -width / 2.0 + i;
-            double vy = height / 2.0 - j;
+    for(int j = height /*- 1*/; j >= 0; /*--j*/j -= height_inc){
+        for(int i = 0; i < width /* 1 */; /*++i*/width_inc){
+            //double vx = -width / 2.0 + i;
+            //double vy = height / 2.0 - j;
+            double vx = -width / 2 + i;
+            double vy = height / 2 - j;
             double vz = z;
             //todo: its kinda slow ngl
             //todo: remove yaw pitch and roll here
@@ -457,7 +462,10 @@ std::function<void()> render =
 , resize =
 [](){
     z = width / (2 * tan(horizontal_fov / 2));
-    vertical_fov = atan(tan(height / 2.0) * height / width);
+    vertical_fov = atan(tan(height_px / 2.0) * height_px / width_px);
+    height = height_px / width_px;
+    width_inc = width / width_px;
+    height_inc = height / height_px;
 };
 LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
     static HDC pdc;
@@ -470,8 +478,8 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
             BITMAPINFO bitmapinfo{};
             hdc = CreateCompatibleDC(0);
             bitmapinfo.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-            bitmapinfo.bmiHeader.biWidth = width;
-            bitmapinfo.bmiHeader.biHeight = -height; // top down is negative
+            bitmapinfo.bmiHeader.biWidth = width_px;
+            bitmapinfo.bmiHeader.biHeight = -height_px; // top down is negative
             bitmapinfo.bmiHeader.biPlanes = 1;
             bitmapinfo.bmiHeader.biBitCount = 32;
             bitmapinfo.bmiHeader.biCompression = BI_RGB;
@@ -484,8 +492,8 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
             break;
         }
         case WM_SIZE:{
-            width = LOWORD(l);
-            height = HIWORD(l);
+            width_px = LOWORD(l);
+            height_px = HIWORD(l);
             resize();
             SelectObject(pdc, old);
             DeleteDC(pdc);
@@ -532,7 +540,7 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
             PAINTSTRUCT ps;
             HDC h = BeginPaint(hwnd, &ps);
             render();
-            BitBlt(h, 0, 0, width, height, pdc, 0, 0, SRCCOPY);
+            BitBlt(h, 0, 0, width_px, height_px, pdc, 0, 0, SRCCOPY);
             EndPaint(hwnd, &ps);
             break;
         }
@@ -558,7 +566,7 @@ int main(){
     wc.hCursor = LoadCursor(0, IDC_ARROW);
     wc.lpfnWndProc = WindowProcessMessages;
     RegisterClass(&wc);
-    int a = width + 16, b = height + 39;
+    int a = width_px + 16, b = height_px + 39;
     CreateWindow(name, name, WS_OVERLAPPEDWINDOW | WS_CAPTION | WS_SYSMENU | WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT, a, b, 0, 0, 0, 0);
     MSG msg{};
     while(GetMessage(&msg, 0, 0, 0)){
