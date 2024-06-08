@@ -47,22 +47,22 @@ struct point{
     double x, y, z;
     point() : x(0), y(0), z(0){}
     point(double e, double f, double g) : x(e), y(f), z(g){}
-	point operator-(){
+	inline point operator-(){
 		return point(-x, -y, -z);
 	}
-    point operator-(point f){
+    inline point operator-(point f){
         return point(x - f.x, y - f.y, z - f.z);
     }
-    point& operator-=(point g){
+    inline point& operator-=(point g){
         x -= g.x;
         y -= g.y;
         z -= g.z;
         return *this;
     }
-    point operator*(double h){
+    inline point operator*(double h){
         return point(x * h, y * h, z * h);
     }
-	point operator/(double i){
+	inline point operator/(double i){
 		return point(x / i, y / i, z / i);
 	}
 };
@@ -252,35 +252,16 @@ struct doughnut : public object{
     virtual void set_color(color c){clr = c;}
     std::pair<bool, double> hit(vector u) override{
         u -= center; // todo: with a center other than the origin the donut does weird things
-		{ // curly brackets for fun ig
-            if(yaw_rad){
-                double cos_yar = cos(-yaw_rad), sin_yar = sin(-yaw_rad), sin_yar_x = sin_yar * u.x;
-                u.x = cos_yar * u.x + sin_yar * u.z;
-                u.z = -sin_yar_x + cos_yar * u.z;
-            }
-            if(pitch_rad){
-				//double temp = vx;
-				//vx = cos(pitch_angle_radians) * vx + sin(pitch_angle_radians) * u.z;
-				//u.z = -sin(pitch_angle_radians) * temp + cos(pitch_angle_radians) * vz;
-				//u.y += u.z * sin(pitch_angle_radians);
-
-				//todo: check if pitch is actually correct
-				double cos_par = cos(-pitch_rad), sin_par = sin(-pitch_rad), sin_par_y = sin_par * u.y;
-				u.y = cos_par * u.y - sin_par * u.z;
-				u.z = sin_par_y + cos_par * u.z;
-
-				//u.y += u.z * sin(pitch_angle_radians);
-			}
-            /*
-			if(roll_rad){
-				//double temp = u.y;
-				//u.y = cos(roll_angle_radians) * vy - sin(roll_angle_radians) * u.z;
-				//u.z = sin(roll_angle_radians) * temp + cos(roll_angle_radians) * vz;
-				double cos_rar = cos(-roll_rad), sin_rar = sin(-roll_rad), sin_rar_x = sin_rar * u.x;
-				u.x = cos_rar * u.x - sin_rar * u.y;
-				u.y = sin_rar_x + cos_rar * u.y;
-			}
-            */
+		if(yaw_rad){
+			double cos_yar = cos(-yaw_rad), sin_yar = sin(-yaw_rad), sin_yar_x = sin_yar * u.x;
+			u.x = cos_yar * u.x + sin_yar * u.z;
+			u.z = -sin_yar_x + cos_yar * u.z;
+		}
+		if(pitch_rad){
+			//todo: check if pitch is actually correct
+			double cos_par = cos(-pitch_rad), sin_par = sin(-pitch_rad), sin_par_y = sin_par * u.y;
+			u.y = cos_par * u.y - sin_par * u.z;
+			u.z = sin_par_y + cos_par * u.z;
 		}
         //this will be in render
         //todo: then instantly return false if donut is not in field of view
@@ -341,10 +322,16 @@ polygon p(RGB(0, 255, 0), a, b, c
     , d
 #endif
 );
-std::vector<object*> world = {&s, &p, &d};
+std::vector<object*> world = {&s, &p
+#ifdef NO_DOUGHNUT
+	};
+#else
+, &d};
+#endif
 double z = width / (2 * tan(horizontal_fov / 2));
 std::function<void()> render =
 [](){
+	++f;
     //todo: use the gpu for calculations
 	std::vector<object*> can_hit = world; // copy
     point bounding[4]{
@@ -353,7 +340,6 @@ std::function<void()> render =
         point(-width / 2.0, -height / 2.0, z), //bottom left
         point(width / 2.0, -height / 2.0, z) //bottom right
     };
-    //todo: rotate the bounding points by yaw pitch and roll, during initialization or after
 
     for(point& i : bounding){
         if(yaw_angle_radians){
@@ -362,44 +348,26 @@ std::function<void()> render =
             i.z = -sin_yar_x + cos_yar * i.z;
         }
         if(pitch_angle_radians){
-            //double temp = i.x;
-            //i.x = cos(pitch_angle_radians) * i.x + sin(pitch_angle_radians) * i.z;
-            //i.z = -sin(pitch_angle_radians) * temp + cos(pitch_angle_radians) * i.z;
-            //i.y += i.z * sin(pitch_angle_radians);
-
 			//todo: check if pitch is actually correct
             double cos_par = cos(pitch_angle_radians), sin_par = sin(pitch_angle_radians), sin_par_y = sin_par * i.y;
             i.y = cos_par * i.y - sin_par * i.z;
             i.z = sin_par_y + cos_par * i.z;
-
-            //i.y += i.z * sin(pitch_angle_radians);
         }
         if(roll_angle_radians){
-            //double temp = i.y;
-            //i.y = cos(roll_angle_radians) * i.y - sin(roll_angle_radians) * i.z;
-            //i.z = sin(roll_angle_radians) * temp + cos(roll_angle_radians) * i.z;
             double cos_rar = cos(roll_angle_radians), sin_rar = sin(roll_angle_radians), sin_rar_x = sin_rar * i.x;
             i.x = cos_rar * i.x - sin_rar * i.y;
             i.y = sin_rar_x + cos_rar * i.y;
         }
     }
-	
-    constexpr double scaler = 0; // any number that isn't 1, maybe just change it to 0 idk
-    std::vector<std::vector<point>> plane{
+
+	constexpr double scaler = 0; // any number not 1
+	std::vector<std::vector<point>> plane{
         {bounding[0], bounding[2], bounding[0] * scaler}, //left
         {bounding[1], bounding[3], bounding[1] * scaler}, //right
         {bounding[0], bounding[1], bounding[0] * scaler}, //top
         {bounding[2], bounding[3], bounding[2] * scaler}, //bottom
     };
 	
-	/*
-	std::vector<std::vector<point>> plane{
-        {bounding[0], bounding[2], 0}, //left
-        {bounding[1], bounding[3], 0}, //right
-        {bounding[0], bounding[1], 0}, //top
-        {bounding[2], bounding[3], 0}, //bottom
-    };
-	*/
     //todo: in is_in_frustum() for every object, find the distance from either the center or all points to each plane, and check if any part of the shape is inside
     #if __cplusplus >= 202002L
         std::erase_if(can_hit, [&plane](object* i){return !i->is_in_frustum(plane);});
@@ -407,17 +375,15 @@ std::function<void()> render =
         can_hit.erase(std::remove_if(can_hit.begin(), can_hit.end(), [&plane](object* i){return !i->is_in_frustum(plane);}), can_hit.end());
     #endif
 
-    ++f;
-    //todo: start from upper left instead
-    //todo: increment vx, vy, and vz by the appropriate amount starting from the top left
 	vector start = plane[0][0];
 	vector row_inc = (plane[2][1] - plane[2][0]) / width_px, column_dec = (plane[0][0] - plane[0][1]) / height_px;
     for(int jpx = height_px - 1; jpx >= 0; start -= column_dec, --jpx){
 		double row_vx = start.x, row_vy = start.y, row_vz = start.z;
+		int prev = jpx * width_px;
         for(int ipx = 0; ipx < width_px; row_vx += row_inc.x, row_vy += row_inc.y, row_vz += row_inc.z, ++ipx){
             //double vx = -width / 2.0 + i;
             //double vy = height / 2.0 - j;
-			int index = jpx * width_px + ipx;
+			int index = prev + ipx;
 			vector v(row_vx, -row_vy, row_vz);
             bool hit_nothing = true, small_change = false;
             object* smallest = can_hit[0];
