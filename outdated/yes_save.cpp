@@ -62,9 +62,6 @@ struct point{
     point operator*(double h){
         return point(x * h, y * h, z * h);
     }
-	point operator/(double i){
-		return point(x / i, y / i, z / i);
-	}
 };
 typedef uint32_t color;
 typedef point vector;
@@ -383,7 +380,6 @@ std::function<void()> render =
             i.y = sin_rar_x + cos_rar * i.y;
         }
     }
-	
     constexpr double scaler = 0; // any number that isn't 1, maybe just change it to 0 idk
     std::vector<std::vector<point>> plane{
         {bounding[0], bounding[2], bounding[0] * scaler}, //left
@@ -391,15 +387,6 @@ std::function<void()> render =
         {bounding[0], bounding[1], bounding[0] * scaler}, //top
         {bounding[2], bounding[3], bounding[2] * scaler}, //bottom
     };
-	
-	/*
-	std::vector<std::vector<point>> plane{
-        {bounding[0], bounding[2], 0}, //left
-        {bounding[1], bounding[3], 0}, //right
-        {bounding[0], bounding[1], 0}, //top
-        {bounding[2], bounding[3], 0}, //bottom
-    };
-	*/
     //todo: in is_in_frustum() for every object, find the distance from either the center or all points to each plane, and check if any part of the shape is inside
     #if __cplusplus >= 202002L
         std::erase_if(can_hit, [&plane](object* i){return !i->is_in_frustum(plane);});
@@ -410,15 +397,47 @@ std::function<void()> render =
     ++f;
     //todo: start from upper left instead
     //todo: increment vx, vy, and vz by the appropriate amount starting from the top left
-	vector start = plane[0][0];
-	vector row_inc = (plane[2][1] - plane[2][0]) / width_px, column_dec = (plane[0][0] - plane[0][1]) / height_px;
-    for(int jpx = height_px - 1; jpx >= 0; start -= column_dec, --jpx){
-		double row_vx = start.x, row_vy = start.y, row_vz = start.z;
-        for(int ipx = 0; ipx < width_px; row_vx += row_inc.x, row_vy += row_inc.y, row_vz += row_inc.z, ++ipx){
+    int ipx, jpx = height_px - 1;
+    for(double j = height/*- 1*/; j >= 0 && jpx >= 0; /*--j*/j -= pixel_inc, --jpx){
+		ipx = 0;
+        for(double i = 0; i < width /* 1 */ && ipx < width_px; /*++i*/i += pixel_inc, ++ipx){
             //double vx = -width / 2.0 + i;
             //double vy = height / 2.0 - j;
 			int index = jpx * width_px + ipx;
-			vector v(row_vx, -row_vy, row_vz);
+			//std::cout << "index: " << index << '\n';
+            double vx = -width / 2 + i;
+            double vy = height / 2 - j;
+            double vz = z;
+            //todo: its kinda slow ngl
+            //todo: remove yaw pitch and roll here
+            if(yaw_angle_radians){
+                double cos_yar = cos(yaw_angle_radians), sin_yar = sin(yaw_angle_radians), sin_yar_vx = sin_yar * vx;
+                vx = cos_yar * vx + sin_yar * vz;
+                vz = -sin_yar_vx + cos_yar * vz;
+            }
+            if(pitch_angle_radians){
+                //double temp = vx;
+                //vx = cos(pitch_angle_radians) * vx + sin(pitch_angle_radians) * vz;
+                //vz = -sin(pitch_angle_radians) * temp + cos(pitch_angle_radians) * vz;
+                //vy += vz * sin(pitch_angle_radians);
+
+                double cos_par = cos(pitch_angle_radians), sin_par = sin(pitch_angle_radians), sin_par_vy = sin_par * vy;
+                vy = cos_par * vy - sin_par * vz;
+                vz = sin_par_vy + cos_par * vz;
+
+                //todo: update pitch to something instead of this
+                //vy += vz * sin(pitch_angle_radians);
+            }
+            if(roll_angle_radians){
+                //double temp = vy;
+                //vy = cos(roll_angle_radians) * vy - sin(roll_angle_radians) * vz;
+                //vz = sin(roll_angle_radians) * temp + cos(roll_angle_radians) * vz;
+                double cos_rar = cos(roll_angle_radians), sin_rar = sin(roll_angle_radians), sin_rar_vx = sin_rar * vx;
+                vx = cos_rar * vx - sin_rar * vy;
+                vy = sin_rar_vx + cos_rar * vy;
+            }
+            vector v(vx, vy, vz);
+
             bool hit_nothing = true, small_change = false;
             object* smallest = can_hit[0];
             std::pair<bool, double> hit_b = smallest->hit(v);
@@ -502,10 +521,10 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
         case WM_KEYDOWN:
 			switch(w){
 				case 'W': case VK_UP:
-					pitch_angle_radians = pitch_angle_radians + 0.15;
+					pitch_angle_radians = pitch_angle_radians - 0.15;
 					break;
 				case 'S': case VK_DOWN:
-					pitch_angle_radians = pitch_angle_radians - 0.15;
+					pitch_angle_radians = pitch_angle_radians + 0.15;
 					break;
 				case 'A': case VK_LEFT:
 					yaw_angle_radians = yaw_angle_radians - 0.15;
