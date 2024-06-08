@@ -374,41 +374,108 @@ std::function<void()> render =
     #else
         can_hit.erase(std::remove_if(can_hit.begin(), can_hit.end(), [&plane](object* i){return !i->is_in_frustum(plane);}), can_hit.end());
     #endif
+	if(yaw_angle_radians || pitch_angle_radians || roll_angle_radians){
+		vector start = plane[0][0];
+		vector row_inc = (plane[2][1] - plane[2][0]) / width_px, column_dec = (plane[0][0] - plane[0][1]) / height_px;
+		for(int jpx = height_px - 1; jpx >= 0; start -= column_dec, --jpx){
+			double row_vx = start.x, row_vy = start.y, row_vz = start.z;
+			int prev = jpx * width_px;
+			for(int ipx = 0; ipx < width_px; row_vx += row_inc.x, row_vy += row_inc.y, row_vz += row_inc.z, ++ipx){
+				//double vx = -width / 2.0 + i;
+				//double vy = height / 2.0 - j;
+				int index = prev + ipx;
+				vector v(row_vx, -row_vy, row_vz);
+				bool hit_nothing = true, small_change = false;
+				object* smallest = can_hit[0];
+				std::pair<bool, double> hit_b = smallest->hit(v);
+				//todo: likely and unlikely might be unnecessary
+				for(int w = 1; w < (int)can_hit.size(); ++w){
+					//if(comp(hit_nothing, v, world[i], smallest)) smallest = world[i];
+					std::pair<bool, double> hit_a = can_hit[w]->hit(v);
+					if(small_change) hit_b = smallest->hit(v), small_change = false;
+					//std::pair<bool, double> hit_a(0, 0), hit_b(0, 0);
 
-	vector start = plane[0][0];
-	vector row_inc = (plane[2][1] - plane[2][0]) / width_px, column_dec = (plane[0][0] - plane[0][1]) / height_px;
-    for(int jpx = height_px - 1; jpx >= 0; start -= column_dec, --jpx){
-		double row_vx = start.x, row_vy = start.y, row_vz = start.z;
-		int prev = jpx * width_px;
-        for(int ipx = 0; ipx < width_px; row_vx += row_inc.x, row_vy += row_inc.y, row_vz += row_inc.z, ++ipx){
-            //double vx = -width / 2.0 + i;
-            //double vy = height / 2.0 - j;
-			int index = prev + ipx;
-			vector v(row_vx, -row_vy, row_vz);
-            bool hit_nothing = true, small_change = false;
-            object* smallest = can_hit[0];
-            std::pair<bool, double> hit_b = smallest->hit(v);
-            //todo: likely and unlikely might be unnecessary
-            for(int w = 1; w < (int)can_hit.size(); ++w){
-                //if(comp(hit_nothing, v, world[i], smallest)) smallest = world[i];
-                std::pair<bool, double> hit_a = can_hit[w]->hit(v);
-                if(small_change) hit_b = smallest->hit(v), small_change = false;
-                //std::pair<bool, double> hit_a(0, 0), hit_b(0, 0);
+					if(unlikely(hit_a.first)){
+						hit_nothing = false;
+						if(unlikely(hit_b.first)){
+							if(hit_a.second < hit_b.second)
+								smallest = can_hit[w], small_change = true;
+						}
+						else smallest = can_hit[w], small_change = true;
+					}
+					else hit_nothing = !hit_b.first;
+				}
+				if(likely(hit_nothing)) framebuf[index] = RGB(255, 255, 255);//RGB(255, 0, 0);
+				else framebuf[index] = smallest->clr;
+			}
+		}
+	}else{
+		int ipx, jpx = height_px - 1;
+		for(double j = height/*- 1*/; j >= 0 && jpx >= 0; /*--j*/j -= pixel_inc, --jpx){
+			ipx = 0;
+			for(double i = 0; i < width /* 1 */ && ipx < width_px; /*++i*/i += pixel_inc, ++ipx){
+				//double vx = -width / 2.0 + i;
+				//double vy = height / 2.0 - j;
+				int index = jpx * width_px + ipx;
+				//std::cout << "index: " << index << '\n';
+				double vx = -width / 2 + i;
+				double vy = height / 2 - j;
+				double vz = z;
+				//todo: its kinda slow ngl
+				//todo: remove yaw pitch and roll here
+				if(yaw_angle_radians){
+					double cos_yar = cos(yaw_angle_radians), sin_yar = sin(yaw_angle_radians), sin_yar_vx = sin_yar * vx;
+					vx = cos_yar * vx + sin_yar * vz;
+					vz = -sin_yar_vx + cos_yar * vz;
+				}
+				if(pitch_angle_radians){
+					//double temp = vx;
+					//vx = cos(pitch_angle_radians) * vx + sin(pitch_angle_radians) * vz;
+					//vz = -sin(pitch_angle_radians) * temp + cos(pitch_angle_radians) * vz;
+					//vy += vz * sin(pitch_angle_radians);
 
-                if(unlikely(hit_a.first)){
-                    hit_nothing = false;
-                    if(unlikely(hit_b.first)){
-                        if(hit_a.second < hit_b.second)
-                            smallest = can_hit[w], small_change = true;
-                    }
-                    else smallest = can_hit[w], small_change = true;
-                }
-                else hit_nothing = !hit_b.first;
-            }
-            if(likely(hit_nothing)) framebuf[index] = RGB(255, 255, 255);//RGB(255, 0, 0);
-            else framebuf[index] = smallest->clr;
-        }
-    }
+					double cos_par = cos(pitch_angle_radians), sin_par = sin(pitch_angle_radians), sin_par_vy = sin_par * vy;
+					vy = cos_par * vy - sin_par * vz;
+					vz = sin_par_vy + cos_par * vz;
+
+					//todo: update pitch to something instead of this
+					//vy += vz * sin(pitch_angle_radians);
+				}
+				if(roll_angle_radians){
+					//double temp = vy;
+					//vy = cos(roll_angle_radians) * vy - sin(roll_angle_radians) * vz;
+					//vz = sin(roll_angle_radians) * temp + cos(roll_angle_radians) * vz;
+					double cos_rar = cos(roll_angle_radians), sin_rar = sin(roll_angle_radians), sin_rar_vx = sin_rar * vx;
+					vx = cos_rar * vx - sin_rar * vy;
+					vy = sin_rar_vx + cos_rar * vy;
+				}
+				vector v(vx, vy, vz);
+
+				bool hit_nothing = true, small_change = false;
+				object* smallest = can_hit[0];
+				std::pair<bool, double> hit_b = smallest->hit(v);
+				//todo: likely and unlikely might be unnecessary
+				for(int w = 1; w < (int)can_hit.size(); ++w){
+					//if(comp(hit_nothing, v, world[i], smallest)) smallest = world[i];
+					std::pair<bool, double> hit_a = can_hit[w]->hit(v);
+					if(small_change) hit_b = smallest->hit(v), small_change = false;
+					//std::pair<bool, double> hit_a(0, 0), hit_b(0, 0);
+
+					if(unlikely(hit_a.first)){
+						hit_nothing = false;
+						if(unlikely(hit_b.first)){
+							if(hit_a.second < hit_b.second)
+								smallest = can_hit[w], small_change = true;
+						}
+						else smallest = can_hit[w], small_change = true;
+					}
+					else hit_nothing = !hit_b.first;
+				}
+				if(likely(hit_nothing)) framebuf[index] = RGB(255, 255, 255);//RGB(255, 0, 0);
+				else framebuf[index] = smallest->clr;
+			}
+		}
+	}
 }
 , resize =
 [](){
