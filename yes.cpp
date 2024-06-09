@@ -224,18 +224,6 @@ struct polygon : public object{
         return std::pair<bool, double>(inside, distance);
     }
     bool is_in_frustum(std::vector<std::vector<point>> plane) override{
-        //return true; // for now
-		/*
-		for(std::vector<point>& bound : plane){
-			for(point& i : points){
-				vector a = bound[1] - bound[0], b = bound[2] - bound[0], cross = cross_product(a, b);
-				double distance = dot_product(cross, i);
-				std::cout << distance << '\n';
-				if(distance < 0){std::cout << "nah polygon died\n"; return false;}
-			}
-        }
-        return true;
-		*/
 		//todo: when completing a 360 degree rotation the polygon disappears :(
 		for(point& i : points){
 			bool this_point = true;
@@ -260,8 +248,8 @@ struct doughnut : public object{
     point center;
     double minor_radius, major_radius;
     double yaw_rad, pitch_rad;
-    doughnut(color cl, double minor_r, double major_r, point c, double /*pitch*/yaw = 0, double /*roll*/pitch = 0) :
-        center(c), minor_radius(minor_r), major_radius(major_r), /*pitch*/yaw_rad(/*pitch*/yaw), /*roll*/pitch_rad(/*roll*/pitch), epsilon(major_r * major_r - minor_r * minor_r){set_color(cl);}
+    doughnut(color cl, double minor_r, double major_r, point c, double yaw = 0, double pitch = 0) :
+        center(c), minor_radius(minor_r), major_radius(major_r), yaw_rad(yaw), pitch_rad(pitch), epsilon(major_r * major_r - minor_r * minor_r){set_color(cl);}
     virtual void set_color(color c){clr = c;}
     std::pair<bool, double> hit(vector u) override{
         u -= center; // todo: with a center other than the origin the donut does weird things
@@ -276,8 +264,6 @@ struct doughnut : public object{
 			u.y = cos_par * u.y - sin_par * u.z;
 			u.z = sin_par_y + cos_par * u.z;
 		}
-        //this will be in render
-        //todo: then instantly return false if donut is not in field of view
         double magnitude = sqrt(u.x * u.x + u.y * u.y + u.z * u.z);
         constexpr double scaler = 1;
         u.x /= (magnitude * scaler), u.y /= (magnitude * scaler), u.z /= (magnitude * scaler);
@@ -376,7 +362,7 @@ std::function<void()> render =
 			}
 		}
 	}
-
+	/*
 	constexpr double scaler = 0; // any number not 1
 	std::vector<std::vector<point>> plane{ // just put point(0, 0, 0) as the third one ig
         {bounding[0], bounding[2], bounding[0] * scaler}, //left
@@ -384,6 +370,15 @@ std::function<void()> render =
 		{bounding[1], bounding[0], bounding[1] * scaler}, //top
         {bounding[2], bounding[3], bounding[2] * scaler}, //bottom
     };
+	*/
+
+	std::vector<std::vector<point>> plane{
+        {bounding[0], bounding[2], point(0, 0, 0)}, //left
+		{bounding[3], bounding[1], point(0, 0, 0)}, //right
+		{bounding[1], bounding[0], point(0, 0, 0)}, //top
+        {bounding[2], bounding[3], point(0, 0, 0)}, //bottom
+    };
+
     //todo: in is_in_frustum() for every object, find the distance from either the center or all points to each plane, and check if any part of the shape is inside
 	#if __cplusplus >= 202002L
         std::erase_if(can_hit, [&plane](object* i){return !i->is_in_frustum(plane);});
@@ -407,10 +402,8 @@ std::function<void()> render =
 				//todo: likely and unlikely might be unnecessary
 				for(int w = 1; w < (int)can_hit.size(); ++w){
 					//if(comp(hit_nothing, v, world[i], smallest)) smallest = world[i];
-					std::pair<bool, double> hit_a = can_hit[w]->hit(v);	
-					
+					std::pair<bool, double> hit_a = can_hit[w]->hit(v);				
 					if(small_change) hit_b = smallest->hit(v), small_change = false;
-					//std::pair<bool, double> hit_a(0, 0), hit_b(0, 0);
 
 					if(unlikely(hit_a.first)){
 						hit_nothing = false;
@@ -431,42 +424,8 @@ std::function<void()> render =
 		for(double j = height/*- 1*/; j >= 0 && jpx >= 0; /*--j*/j -= pixel_inc, --jpx){
 			ipx = 0;
 			for(double i = 0; i < width /* 1 */ && ipx < width_px; /*++i*/i += pixel_inc, ++ipx){
-				//double vx = -width / 2.0 + i;
-				//double vy = height / 2.0 - j;
 				int index = jpx * width_px + ipx;
-				//std::cout << "index: " << index << '\n';
-				double vx = -width / 2 + i;
-				double vy = height / 2 - j;
-				double vz = z;
-				//todo: its kinda slow ngl
-				//todo: remove yaw pitch and roll here
-				if(yaw_angle_radians){
-					double cos_yar = cos(yaw_angle_radians), sin_yar = sin(yaw_angle_radians), sin_yar_vx = sin_yar * vx;
-					vx = cos_yar * vx + sin_yar * vz;
-					vz = -sin_yar_vx + cos_yar * vz;
-				}
-				if(pitch_angle_radians){
-					//double temp = vx;
-					//vx = cos(pitch_angle_radians) * vx + sin(pitch_angle_radians) * vz;
-					//vz = -sin(pitch_angle_radians) * temp + cos(pitch_angle_radians) * vz;
-					//vy += vz * sin(pitch_angle_radians);
-
-					double cos_par = cos(pitch_angle_radians), sin_par = sin(pitch_angle_radians), sin_par_vy = sin_par * vy;
-					vy = cos_par * vy - sin_par * vz;
-					vz = sin_par_vy + cos_par * vz;
-
-					//todo: update pitch to something instead of this
-					//vy += vz * sin(pitch_angle_radians);
-				}
-				if(roll_angle_radians){
-					//double temp = vy;
-					//vy = cos(roll_angle_radians) * vy - sin(roll_angle_radians) * vz;
-					//vz = sin(roll_angle_radians) * temp + cos(roll_angle_radians) * vz;
-					double cos_rar = cos(roll_angle_radians), sin_rar = sin(roll_angle_radians), sin_rar_vx = sin_rar * vx;
-					vx = cos_rar * vx - sin_rar * vy;
-					vy = sin_rar_vx + cos_rar * vy;
-				}
-				vector v(vx, vy, vz);
+				vector v(-width / 2 + i, height / 2 - j, z);
 
 				bool hit_nothing = true, small_change = false;
 				object* smallest = can_hit[0];
@@ -476,7 +435,6 @@ std::function<void()> render =
 					//if(comp(hit_nothing, v, world[i], smallest)) smallest = world[i];
 					std::pair<bool, double> hit_a = can_hit[w]->hit(v);
 					if(small_change) hit_b = smallest->hit(v), small_change = false;
-					//std::pair<bool, double> hit_a(0, 0), hit_b(0, 0);
 
 					if(unlikely(hit_a.first)){
 						hit_nothing = false;
@@ -488,7 +446,7 @@ std::function<void()> render =
 					}
 					else hit_nothing = !hit_b.first;
 				}
-				if(likely(hit_nothing)) framebuf[index] = RGB(255, 255, 255);//RGB(255, 0, 0);
+				if(likely(hit_nothing) && !hit_b.first) framebuf[index] = RGB(255, 255, 255);//RGB(255, 0, 0);
 				else framebuf[index] = smallest->clr;
 			}
 		}
