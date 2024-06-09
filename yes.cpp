@@ -113,22 +113,9 @@ struct sphere : public object{
 		double distance = dot_product(plane_normal, center);
 		//todo: might not be exactly when its on the other side idk
 		if(distance > 0){/*std::cout << "nah fam\n";*/ return false;}
+
+		//todo: fix returning true when sphere isnt in frustum 
 		for(/*int c = 0; c < (int)plane.size(); ++c*/ std::vector<point>& bound : plane){
-            /*
-			for(point& i : plane[c]) i -= center;
-
-            vector a = plane[c][1] - plane[c][0], b = plane[c][2] - plane[c][0];
-            // literally just the cross product btw
-            double i = a.y * b.z - a.z * b.y,
-                   j = a.x * b.z - a.z * b.x,
-                   k = a.x * b.y - a.y * b.x;
-            double d = i * -plane[c][0].x + j * -plane[c][0].y + k * -plane[c][0].z;
-
-            //todo: its always printing the same result
-            std::cout << d / sqrt(i * i + j * j + k * k) << '\n';
-            if(d / sqrt(i * i + j * j + k * k) < radius) return true;
-            */
-
             vector a = bound/*plane[c]*/[1] - bound/*plane[c]*/[0], b = bound/*plane[c]*/[2] - bound/*plane[c]*/[0], cross = cross_product(a, b);
 
             double cross_mag = sqrt(cross.x * cross.x + cross.y * cross.y + cross.z * cross.z);
@@ -141,11 +128,6 @@ struct sphere : public object{
             if(abs_val(distance) < radius){/*std::cout << "tru moo: " << distance << '\n';*/ return true;}
         }
         return false;
-
-        //bool in = d / (i * i + j * j + k * k) < radius;
-        //return d / (i * i + j * j + k * k) < radius; //for now
-        //return in;
-        //return true;
     }
 };
 struct polygon : public object{
@@ -222,19 +204,21 @@ struct polygon : public object{
         return std::pair<bool, double>(inside, distance);
     }
     bool is_in_frustum(std::vector<std::vector<point>> plane) override{
-		//todo: when completing a 360 degree rotation the polygon disappears :(
 		for(point& i : points){
 			bool this_point = true;
 			for(std::vector<point>& bound : plane){
 				vector a = bound[1] - bound[0], b = bound[2] - bound[0], cross = cross_product(a, b);
+				//double cross_mag = sqrt(cross.x * cross.x + cross.y * cross.y + cross.z * cross.z);
+            	//cross.x /= cross_mag, cross.y /= cross_mag, cross.z /= cross_mag;
 				double distance = dot_product(cross, i);
 				if(distance < 0){
 					this_point = false; 
 					break;
 				}
 			}
-			if(this_point) return true;
+			if(this_point){/*std::cout << "polygon in frustum real\n";*/ return true;}
         }
+		//std::cout << "EVICTION ALERT!!!\n";
         return false;	
     }
 private:
@@ -371,6 +355,10 @@ std::function<void()> render =
     #else
         can_hit.erase(std::remove_if(can_hit.begin(), can_hit.end(), [&plane](object* i){return !i->is_in_frustum(plane);}), can_hit.end());
     #endif
+	if(!can_hit.size()){
+		for(int i = 0; i < width_px * height_px; ++i) framebuf[i] = RGB(255, 255, 255);
+		return;
+	}
 	if(ypr){
 		vector start = plane[0][0]; //start at top left
 		vector row_inc = (plane[2][0] - plane[2][1]) / width_px, column_dec = (plane[0][0] - plane[0][1]) / height_px;
@@ -382,9 +370,9 @@ std::function<void()> render =
 				//double vy = height / 2.0 - j;
 				int index = prev + ipx;
 				vector v(row_vx, -row_vy, row_vz);
-				bool hit_nothing = true, small_change = false;
 				object* smallest = can_hit[0];
 				std::pair<bool, double> hit_b = smallest->hit(v);
+				bool hit_nothing = !hit_b.first, small_change = false;
 				//todo: likely and unlikely might be unnecessary
 				for(int w = 1; w < (int)can_hit.size(); ++w){
 					//if(comp(hit_nothing, v, world[i], smallest)) smallest = world[i];
@@ -401,7 +389,7 @@ std::function<void()> render =
 					}
 					else hit_nothing = !hit_b.first;
 				}
-				if(likely(hit_nothing) && !hit_b.first) framebuf[index] = RGB(255, 255, 255);//RGB(255, 0, 0);
+				if(likely(hit_nothing)) framebuf[index] = RGB(255, 255, 255);//RGB(255, 0, 0);
 				else framebuf[index] = smallest->clr;
 			}
 		}
@@ -413,9 +401,9 @@ std::function<void()> render =
 				int index = jpx * width_px + ipx;
 				vector v(-width / 2 + i, height / 2 - j, z);
 
-				bool hit_nothing = true, small_change = false;
 				object* smallest = can_hit[0];
 				std::pair<bool, double> hit_b = smallest->hit(v);
+				bool hit_nothing = !hit_b.first, small_change = false;
 				//todo: likely and unlikely might be unnecessary
 				for(int w = 1; w < (int)can_hit.size(); ++w){
 					//if(comp(hit_nothing, v, world[i], smallest)) smallest = world[i];
@@ -432,7 +420,7 @@ std::function<void()> render =
 					}
 					else hit_nothing = !hit_b.first;
 				}
-				if(likely(hit_nothing) && !hit_b.first) framebuf[index] = RGB(255, 255, 255);//RGB(255, 0, 0);
+				if(likely(hit_nothing)) framebuf[index] = RGB(255, 255, 255);//RGB(255, 0, 0);
 				else framebuf[index] = smallest->clr;
 			}
 		}

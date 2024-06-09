@@ -45,6 +45,27 @@ double dot = dot_product(u.x, u.y, u.z, center.x, center.y, center.z);
 double determinant = dot * dot - center.x * center.x - center.y * center.y - center.z * center.z + radius * radius;
 return std::pair<bool, double>(determinant >= 0, -dot - sqrt(determinant));
 
+in sphere is_in_frustum() function:
+
+for(point& i : plane[c]) i -= center;
+
+vector a = plane[c][1] - plane[c][0], b = plane[c][2] - plane[c][0];
+// literally just the cross product btw
+double i = a.y * b.z - a.z * b.y,
+	   j = a.x * b.z - a.z * b.x,
+	   k = a.x * b.y - a.y * b.x;
+double d = i * -plane[c][0].x + j * -plane[c][0].y + k * -plane[c][0].z;
+
+//todo: its always printing the same result
+std::cout << d / sqrt(i * i + j * j + k * k) << '\n';
+if(d / sqrt(i * i + j * j + k * k) < radius) return true;
+
+at the end:
+bool in = d / (i * i + j * j + k * k) < radius;
+return d / (i * i + j * j + k * k) < radius; //for now
+return in;
+return true;
+
 in polygon hit() function (to calculate whether a point is in a triangle):
 
 auto sign = [&](point p1, point p2, point p3) -> double{
