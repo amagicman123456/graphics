@@ -81,7 +81,6 @@ struct sphere : public object{
     virtual void set_color(color c){clr = c;}
     std::pair<bool, double> hit(vector u) override{
         //todo: do the same thing for u.x and u.y
-        //todo: also fast reject if sphere is not in field of view
         //in is_in_frustum now
 		//if((u.z > 0 && center.z < radius) || (u.z < 0 && center.z > radius)) return std::pair<bool, double>(false, 0);
 		/*	
@@ -167,7 +166,6 @@ struct polygon : public object{
     };
     std::pair<bool, double> hit(vector u) override{
         //todo: do the same thing for u.x and u.y
-        //todo: also fast reject if polygon is not in field of view
         for(const point& i : points)
             if((u.z < 0 && i.z < 0) || (u.z > 0 && i.z > 0)) goto polygon_start;
         return std::pair<bool, double>(false, 0);
@@ -339,9 +337,7 @@ std::function<void()> render =
         point(-width / 2.0, -height / 2.0, z), //bottom left
         point(width / 2.0, -height / 2.0, z) //bottom right
     };
-
 	bool ypr = yaw_angle_radians || pitch_angle_radians || roll_angle_radians;
-
 	if(ypr){
 		for(point& i : bounding){
 			if(yaw_angle_radians){
@@ -356,29 +352,19 @@ std::function<void()> render =
 				i.z = sin_par_y + cos_par * i.z;
 			}
 			if(roll_angle_radians){
+				//todo: check if roll is actually correct
 				double cos_rar = cos(roll_angle_radians), sin_rar = sin(roll_angle_radians), sin_rar_x = sin_rar * i.x;
 				i.x = cos_rar * i.x - sin_rar * i.y;
 				i.y = sin_rar_x + cos_rar * i.y;
 			}
 		}
 	}
-	/*
-	constexpr double scaler = 0; // any number not 1
-	std::vector<std::vector<point>> plane{ // just put point(0, 0, 0) as the third one ig
-        {bounding[0], bounding[2], bounding[0] * scaler}, //left
-		{bounding[3], bounding[1], bounding[3] * scaler}, //right
-		{bounding[1], bounding[0], bounding[1] * scaler}, //top
-        {bounding[2], bounding[3], bounding[2] * scaler}, //bottom
-    };
-	*/
-
 	std::vector<std::vector<point>> plane{
         {bounding[0], bounding[2], point(0, 0, 0)}, //left
 		{bounding[3], bounding[1], point(0, 0, 0)}, //right
 		{bounding[1], bounding[0], point(0, 0, 0)}, //top
         {bounding[2], bounding[3], point(0, 0, 0)}, //bottom
     };
-
     //todo: in is_in_frustum() for every object, find the distance from either the center or all points to each plane, and check if any part of the shape is inside
 	#if __cplusplus >= 202002L
         std::erase_if(can_hit, [&plane](object* i){return !i->is_in_frustum(plane);});
