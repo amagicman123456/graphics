@@ -37,12 +37,6 @@ inline double greater(double a, double b){
 inline double abs_val(double a){
     return a < 0 ? -a : a;
 }
-//no need for this ig
-/*
-inline double dot_product(double ax, double ay, double az, double bx, double by, double bz){
-    return ax * bx + ay * by + az * bz;
-}
-*/
 struct point{
     double x, y, z;
     point() : x(0), y(0), z(0){}
@@ -88,7 +82,8 @@ struct sphere : public object{
     std::pair<bool, double> hit(vector u) override{
         //todo: do the same thing for u.x and u.y
         //todo: also fast reject if sphere is not in field of view
-        if((u.z > 0 && center.z < radius) || (u.z < 0 && center.z > radius)) return std::pair<bool, double>(false, 0);
+        //in is_in_frustum now
+		//if((u.z > 0 && center.z < radius) || (u.z < 0 && center.z > radius)) return std::pair<bool, double>(false, 0);
 		/*	
         double magnitude_squared = u.x * u.x + u.y * u.y + u.z * u.z;
         //double dot = dot_product(u.x, u.y, u.z, center.x, center.y, center.z);
@@ -110,16 +105,18 @@ struct sphere : public object{
 		return std::pair<bool, double>(true, -dot - sqrt(determinant));
 	}
     bool is_in_frustum(std::vector<std::vector<point>> plane) override{
-        //FOR A LINE
-        //magnitude(cross(A - B, C - B)) 
-        //divided by magnitude(C - B)
-        //so let j = C - B, sqrt(cross(A - B, j)^2 / (j.x * j.x + j.y * j.y + j.z * j.z))
-        
-        //if( < radius * radius)
-
-        for(int c = 0; c < (int)plane.size(); ++c){
+        // fabricate a back side
+		vector left_vector = plane[2][0] - plane[2][1], // vector pointing left from top right to top left
+			   projection = left_vector * (dot_product(plane[2][1], left_vector) / dot_product(left_vector, left_vector)), // point on back side
+			   plane_normal = cross_product(left_vector, vector(0, -1, 0)); // calculate normal facing back
+		//double plane_normal_mag = sqrt(plane_normal.x * plane_normal.x + plane_normal.y * plane_normal.y + plane_normal.z * plane_normal.z);
+        //plane_normal.x /= plane_normal_mag, plane_normal.y /= plane_normal_mag, plane_normal.z /= plane_normal_mag;
+		double distance = dot_product(plane_normal, center);
+		//todo: might not be exactly when its on the other side idk
+		if(distance > 0){/*std::cout << "nah fam\n";*/ return false;}
+		for(/*int c = 0; c < (int)plane.size(); ++c*/ std::vector<point>& bound : plane){
             /*
-            for(point& i : plane[c]) i -= center;
+			for(point& i : plane[c]) i -= center;
 
             vector a = plane[c][1] - plane[c][0], b = plane[c][2] - plane[c][0];
             // literally just the cross product btw
@@ -133,24 +130,15 @@ struct sphere : public object{
             if(d / sqrt(i * i + j * j + k * k) < radius) return true;
             */
 
-            vector a = plane[c][1] - plane[c][0], b = plane[c][2] - plane[c][0], cross = cross_product(a, b);
+            vector a = bound/*plane[c]*/[1] - bound/*plane[c]*/[0], b = bound/*plane[c]*/[2] - bound/*plane[c]*/[0], cross = cross_product(a, b);
 
             double cross_mag = sqrt(cross.x * cross.x + cross.y * cross.y + cross.z * cross.z);
             cross.x /= cross_mag, cross.y /= cross_mag, cross.z /= cross_mag;
 
-            //double distance = dot_product(cross, center);
-            //std::cout << c << ": " << distance << '\n';
-
             //if its positive its facing the same direction as the cross product
             //if its negative its facing the opposite
-            //right hand rule for cross product btw
-
-            //erm probably remove this
-			//double t = -cross.x * center.x - cross.y * center.y - cross.z * center.z;
-			//if(t * cross.x - center.x < radius){std::cout << "tru moo flat\n"; return true;}
 
 			double distance = dot_product(cross, center);
-			//if(distance < 0 || distance < radius){std::cout << "tru moo\n"; return true;}
             if(abs_val(distance) < radius){/*std::cout << "tru moo: " << distance << '\n';*/ return true;}
         }
         return false;
@@ -180,7 +168,7 @@ struct polygon : public object{
     std::pair<bool, double> hit(vector u) override{
         //todo: do the same thing for u.x and u.y
         //todo: also fast reject if polygon is not in field of view
-        for(point& i : points)
+        for(const point& i : points)
             if((u.z < 0 && i.z < 0) || (u.z > 0 && i.z > 0)) goto polygon_start;
         return std::pair<bool, double>(false, 0);
         polygon_start:
@@ -236,7 +224,32 @@ struct polygon : public object{
         return std::pair<bool, double>(inside, distance);
     }
     bool is_in_frustum(std::vector<std::vector<point>> plane) override{
-        return true; // for now
+        //return true; // for now
+		/*
+		for(std::vector<point>& bound : plane){
+			for(point& i : points){
+				vector a = bound[1] - bound[0], b = bound[2] - bound[0], cross = cross_product(a, b);
+				double distance = dot_product(cross, i);
+				std::cout << distance << '\n';
+				if(distance < 0){std::cout << "nah polygon died\n"; return false;}
+			}
+        }
+        return true;
+		*/
+		//todo: when completing a 360 degree rotation the polygon disappears :(
+		for(point& i : points){
+			bool this_point = true;
+			for(std::vector<point>& bound : plane){
+				vector a = bound[1] - bound[0], b = bound[2] - bound[0], cross = cross_product(a, b);
+				double distance = dot_product(cross, i);
+				if(distance < 0){
+					this_point = false; 
+					break;
+				}
+			}
+			if(this_point) return true;
+        }
+        return false;	
     }
 private:
     vector a, b, c;
@@ -341,42 +354,45 @@ std::function<void()> render =
         point(width / 2.0, -height / 2.0, z) //bottom right
     };
 
-    for(point& i : bounding){
-        if(yaw_angle_radians){
-            double cos_yar = cos(yaw_angle_radians), sin_yar = sin(yaw_angle_radians), sin_yar_x = sin_yar * i.x;
-            i.x = cos_yar * i.x + sin_yar * i.z;
-            i.z = -sin_yar_x + cos_yar * i.z;
-        }
-        if(pitch_angle_radians){
-			//todo: check if pitch is actually correct
-            double cos_par = cos(pitch_angle_radians), sin_par = sin(pitch_angle_radians), sin_par_y = sin_par * i.y;
-            i.y = cos_par * i.y - sin_par * i.z;
-            i.z = sin_par_y + cos_par * i.z;
-        }
-        if(roll_angle_radians){
-            double cos_rar = cos(roll_angle_radians), sin_rar = sin(roll_angle_radians), sin_rar_x = sin_rar * i.x;
-            i.x = cos_rar * i.x - sin_rar * i.y;
-            i.y = sin_rar_x + cos_rar * i.y;
-        }
-    }
+	bool ypr = yaw_angle_radians || pitch_angle_radians || roll_angle_radians;
+
+	if(ypr){
+		for(point& i : bounding){
+			if(yaw_angle_radians){
+				double cos_yar = cos(yaw_angle_radians), sin_yar = sin(yaw_angle_radians), sin_yar_x = sin_yar * i.x;
+				i.x = cos_yar * i.x + sin_yar * i.z;
+				i.z = -sin_yar_x + cos_yar * i.z;
+			}
+			if(pitch_angle_radians){
+				//todo: check if pitch is actually correct
+				double cos_par = cos(pitch_angle_radians), sin_par = sin(pitch_angle_radians), sin_par_y = sin_par * i.y;
+				i.y = cos_par * i.y - sin_par * i.z;
+				i.z = sin_par_y + cos_par * i.z;
+			}
+			if(roll_angle_radians){
+				double cos_rar = cos(roll_angle_radians), sin_rar = sin(roll_angle_radians), sin_rar_x = sin_rar * i.x;
+				i.x = cos_rar * i.x - sin_rar * i.y;
+				i.y = sin_rar_x + cos_rar * i.y;
+			}
+		}
+	}
 
 	constexpr double scaler = 0; // any number not 1
-	std::vector<std::vector<point>> plane{
+	std::vector<std::vector<point>> plane{ // just put point(0, 0, 0) as the third one ig
         {bounding[0], bounding[2], bounding[0] * scaler}, //left
-        {bounding[1], bounding[3], bounding[1] * scaler}, //right
-        {bounding[0], bounding[1], bounding[0] * scaler}, //top
+		{bounding[3], bounding[1], bounding[3] * scaler}, //right
+		{bounding[1], bounding[0], bounding[1] * scaler}, //top
         {bounding[2], bounding[3], bounding[2] * scaler}, //bottom
     };
-	
     //todo: in is_in_frustum() for every object, find the distance from either the center or all points to each plane, and check if any part of the shape is inside
-    #if __cplusplus >= 202002L
+	#if __cplusplus >= 202002L
         std::erase_if(can_hit, [&plane](object* i){return !i->is_in_frustum(plane);});
     #else
         can_hit.erase(std::remove_if(can_hit.begin(), can_hit.end(), [&plane](object* i){return !i->is_in_frustum(plane);}), can_hit.end());
     #endif
-	if(yaw_angle_radians || pitch_angle_radians || roll_angle_radians){
-		vector start = plane[0][0];
-		vector row_inc = (plane[2][1] - plane[2][0]) / width_px, column_dec = (plane[0][0] - plane[0][1]) / height_px;
+	if(ypr){
+		vector start = plane[0][0]; //start at top left
+		vector row_inc = (plane[2][0] - plane[2][1]) / width_px, column_dec = (plane[0][0] - plane[0][1]) / height_px;
 		for(int jpx = height_px - 1; jpx >= 0; start -= column_dec, --jpx){
 			double row_vx = start.x, row_vy = start.y, row_vz = start.z;
 			int prev = jpx * width_px;
@@ -391,7 +407,8 @@ std::function<void()> render =
 				//todo: likely and unlikely might be unnecessary
 				for(int w = 1; w < (int)can_hit.size(); ++w){
 					//if(comp(hit_nothing, v, world[i], smallest)) smallest = world[i];
-					std::pair<bool, double> hit_a = can_hit[w]->hit(v);
+					std::pair<bool, double> hit_a = can_hit[w]->hit(v);	
+					
 					if(small_change) hit_b = smallest->hit(v), small_change = false;
 					//std::pair<bool, double> hit_a(0, 0), hit_b(0, 0);
 
@@ -405,7 +422,7 @@ std::function<void()> render =
 					}
 					else hit_nothing = !hit_b.first;
 				}
-				if(likely(hit_nothing)) framebuf[index] = RGB(255, 255, 255);//RGB(255, 0, 0);
+				if(likely(hit_nothing) && !hit_b.first) framebuf[index] = RGB(255, 255, 255);//RGB(255, 0, 0);
 				else framebuf[index] = smallest->clr;
 			}
 		}
