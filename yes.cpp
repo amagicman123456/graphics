@@ -241,7 +241,7 @@ struct doughnut : public object{
 			u.z = -sin_yar_x + cos_yar * u.z;
 		}
 		if(pitch_rad){
-			//todo: check if pitch is actually correct
+			//todo: check if pitch is actually correct (make it so positive always migrates to top instead of going in circles)
 			double cos_par = cos(-pitch_rad), sin_par = sin(-pitch_rad), sin_par_y = sin_par * u.y;
 			u.y = cos_par * u.y - sin_par * u.z;
 			u.z = sin_par_y + cos_par * u.z;
