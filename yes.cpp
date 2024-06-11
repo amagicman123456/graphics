@@ -112,7 +112,7 @@ struct sphere : public object{
         //plane_normal.x /= plane_normal_mag, plane_normal.y /= plane_normal_mag, plane_normal.z /= plane_normal_mag;
 		double distance = dot_product(plane_normal, center);
 		//todo: might not be exactly when its on the other side idk
-		if(distance > 0){/*std::cout << "nah fam\n";*/ return false;}
+		if(distance > 0){std::cout << "nah fam\n"; return false;}
 
 		//todo: fix returning true when sphere isnt in frustum 
 		for(/*int c = 0; c < (int)plane.size(); ++c*/ std::vector<point>& bound : plane){
@@ -234,7 +234,8 @@ struct doughnut : public object{
         center(c), minor_radius(minor_r), major_radius(major_r), yaw_rad(yaw), pitch_rad(pitch), epsilon(major_r * major_r - minor_r * minor_r){set_color(cl);}
     virtual void set_color(color c){clr = c;}
     std::pair<bool, double> hit(vector u) override{
-        u -= center; // todo: with a center other than the origin the donut does weird things
+        //u -= center; // todo: with a center other than the origin the donut does weird things
+		//already accounted for in formula but it still does weird things
 		if(yaw_rad){
 			double cos_yar = cos(-yaw_rad), sin_yar = sin(-yaw_rad), sin_yar_x = sin_yar * u.x;
 			u.x = cos_yar * u.x + sin_yar * u.z;
@@ -322,6 +323,7 @@ std::function<void()> render =
         point(width / 2.0, -height / 2.0, z) //bottom right
     };
 	bool ypr = yaw_angle_radians || pitch_angle_radians || roll_angle_radians;
+	//facing away pitch is reversed for some reason, and sphere shows 180 degrees rotated with pitch
 	if(ypr){
 		for(point& i : bounding){
 			if(yaw_angle_radians){
@@ -330,7 +332,8 @@ std::function<void()> render =
 				i.z = -sin_yar_x + cos_yar * i.z;
 			}
 			if(pitch_angle_radians){
-				//todo: check if pitch is actually correct
+				//todo: check if pitch is actually correct (make it so positive always migrates to top instead of going in circles)
+				//pitch_angle_radians = i.z < 0 ? -pitch_angle_radians : (double)pitch_angle_radians;
 				double cos_par = cos(pitch_angle_radians), sin_par = sin(pitch_angle_radians), sin_par_y = sin_par * i.y;
 				i.y = cos_par * i.y - sin_par * i.z;
 				i.z = sin_par_y + cos_par * i.z;
