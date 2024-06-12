@@ -114,15 +114,11 @@ struct sphere : public object{
 		double distance = dot_product(plane_normal, center);
 		//todo: might not be exactly when its on the other side idk
 		if(distance > 0){std::cout << "nah fam\n"; return false;}
-<<<<<<< HEAD
 		*/
-		//todo: fix returning true when sphere isnt in frustum 
-=======
-
 		//todo: fix returning true when sphere isnt in frustum 
         //corner case: sphere near (top or bottom) and (left or right) ex. near bottom and left is bottom-left
         //middle case: sphere near a side and is bounded by its two adjacent sides ex. sphere near bottom and bounded by left and right
->>>>>>> graphics/master
+		
 		for(/*int c = 0; c < (int)plane.size(); ++c*/ std::vector<point>& bound : plane){
             vector a = bound/*plane[c]*/[1] - bound/*plane[c]*/[0], b = bound/*plane[c]*/[2] - bound/*plane[c]*/[0], cross = cross_product(a, b);
 
