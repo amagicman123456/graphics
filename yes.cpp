@@ -82,7 +82,7 @@ struct sphere : public object{
     std::pair<bool, double> hit(vector u) override{
         //todo: do the same thing for u.x and u.y
         //in is_in_frustum now
-		//if((u.z > 0 && center.z < radius) || (u.z < 0 && center.z > radius)) return std::pair<bool, double>(false, 0);
+		if((u.z > 0 && center.z < radius) || (u.z < 0 && center.z > radius)) return std::pair<bool, double>(false, 0);
 		/*	
         double magnitude_squared = u.x * u.x + u.y * u.y + u.z * u.z;
         //double dot = dot_product(u.x, u.y, u.z, center.x, center.y, center.z);
@@ -104,7 +104,8 @@ struct sphere : public object{
 		return std::pair<bool, double>(true, -dot - sqrt(determinant));
 	}
     bool is_in_frustum(std::vector<std::vector<point>> plane) override{
-        // fabricate a back side
+        /* todo: i guess change vector(0, -1, 0) to the correct vector for all pitch_angle_radians (up and down)
+		// fabricate a back side
 		vector left_vector = plane[2][0] - plane[2][1], // vector pointing left from top right to top left
 			   projection = left_vector * (dot_product(plane[2][1], left_vector) / dot_product(left_vector, left_vector)), // point on back side
 			   plane_normal = cross_product(left_vector, vector(0, -1, 0)); // calculate normal facing back
@@ -113,7 +114,7 @@ struct sphere : public object{
 		double distance = dot_product(plane_normal, center);
 		//todo: might not be exactly when its on the other side idk
 		if(distance > 0){std::cout << "nah fam\n"; return false;}
-
+		*/
 		//todo: fix returning true when sphere isnt in frustum 
 		for(/*int c = 0; c < (int)plane.size(); ++c*/ std::vector<point>& bound : plane){
             vector a = bound/*plane[c]*/[1] - bound/*plane[c]*/[0], b = bound/*plane[c]*/[2] - bound/*plane[c]*/[0], cross = cross_product(a, b);
@@ -206,6 +207,13 @@ struct polygon : public object{
     bool is_in_frustum(std::vector<std::vector<point>> plane) override{
 		for(point& i : points){
 			bool this_point = true;
+			/*
+			vector left_vector = plane[2][0] - plane[2][1], // vector pointing left from top right to top left
+				   projection = left_vector * (dot_product(plane[2][1], left_vector) / dot_product(left_vector, left_vector)), // point on back side
+				   plane_normal = cross_product(left_vector, vector(0, -1, 0)); // calculate normal facing back
+			double distance = dot_product(plane_normal, i);
+			if(distance > 0){this_point = false; break;}
+			*/
 			for(std::vector<point>& bound : plane){
 				vector a = bound[1] - bound[0], b = bound[2] - bound[0], cross = cross_product(a, b);
 				//double cross_mag = sqrt(cross.x * cross.x + cross.y * cross.y + cross.z * cross.z);
@@ -322,7 +330,9 @@ std::function<void()> render =
         point(-width / 2.0, -height / 2.0, z), //bottom left
         point(width / 2.0, -height / 2.0, z) //bottom right
     };
-	bool ypr = yaw_angle_radians || pitch_angle_radians || roll_angle_radians;
+	bool ypr = /*yaw_angle_radians*/ abs_val(fmod(yaw_angle_radians, M_PI)) > 0.01 || 
+			   /*pitch_angle_radians*/ abs_val(fmod(pitch_angle_radians, M_PI)) > 0.01 || 
+			   /*roll_angle_radians*/ abs_val(fmod(roll_angle_radians, M_PI)) > 0.01;
 	//facing away pitch is reversed for some reason, and sphere shows 180 degrees rotated with pitch
 	if(ypr){
 		for(point& i : bounding){
