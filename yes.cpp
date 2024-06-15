@@ -68,7 +68,8 @@ inline vector cross_product(vector a, vector b){
 inline double dot_product(vector a, vector b){
     return a.x * b.x + a.y * b.y + a.z * b.z;
 }
-typedef std::vector<std::vector<point>> plane_array;
+typedef std::vector<point> plane;
+typedef std::vector<plane> plane_array;
 struct object{
 	//todo: make a bunch of stuff const instead
     virtual std::pair<bool, double> hit(vector u) = 0;
@@ -76,7 +77,7 @@ struct object{
     virtual void set_color(color c){clr = c;}
     color clr;
 };
-double plane_distance(std::vector<point> bound, point p){ 
+double plane_distance(plane bound, point p){ 
 	vector a = bound[1] - bound[0], b = bound[2] - bound[0], cross = cross_product(a, b);
 	double cross_mag = sqrt(cross.x * cross.x + cross.y * cross.y + cross.z * cross.z);
 	cross.x /= cross_mag, cross.y /= cross_mag, cross.z /= cross_mag;
@@ -123,7 +124,7 @@ struct sphere : public object{
 		//todo: might not be exactly when its on the other side idk
 		if(distance > 0){std::cout << "nah fam\n"; return false;}
 		*/
-		#if 1
+		#if 0
 		for(/*int c = 0; c < (int)plane.size(); ++c*/ std::vector<point>& bound : plane){
             vector a = bound/*plane[c]*/[1] - bound/*plane[c]*/[0], b = bound/*plane[c]*/[2] - bound/*plane[c]*/[0], cross = cross_product(a, b);
 
@@ -146,11 +147,17 @@ struct sphere : public object{
 		double left_distance = plane_distance(plane[0], center), right_distance = plane_distance(plane[1], center),
 			   top_distance = plane_distance(plane[2], center), bottom_distance = plane_distance(plane[3], center);
 		double corner_distance = radius * 0.707/*106871*/;
+		//assuming > 0 is pointing in for some reason idk
 		return(
-			(left_distance < 0 && right_distance < 0 && top_distance < 0 && bottom_distance < 0)
+			(left_distance > 0 && right_distance > 0 && top_distance > 0 && bottom_distance > 0)
 			||
-			(left_distance > 0 && left_distance < radius && ((/*middle*/top_distance < 0 && bottom_distance < 0) || (/*corner*/(top_distance < corner_distance))))
+			(left_distance < 0 && left_distance > -radius && ((/*middle*/top_distance > 0 && bottom_distance > 0) || (/*corner*/top_distance > -corner_distance || bottom_distance > -corner_distance)))
 			||
+			(right_distance < 0 && right_distance > -radius && ((/*middle*/top_distance > 0 && bottom_distance > 0) || (/*corner*/top_distance > -corner_distance || bottom_distance > -corner_distance)))
+			||
+			(top_distance < 0 && top_distance > -radius && ((/*middle*/left_distance > 0 && right_distance > 0) || (/*corner*/left_distance > -corner_distance || right_distance > -corner_distance)))
+			||
+			(bottom_distance < 0 && bottom_distance > -radius && ((/*middle*/left_distance > 0 && right_distance > 0) || (/*corner*/left_distance > -corner_distance || right_distance > -corner_distance)))
 		);
 		#endif
 	}
@@ -230,7 +237,6 @@ struct polygon : public object{
     }
     bool is_in_frustum(plane_array& plane) override{
 		for(point& i : points){
-			bool this_point = true;
 			/*
 			vector left_vector = plane[2][0] - plane[2][1], // vector pointing left from top right to top left
 				   projection = left_vector * (dot_product(plane[2][1], left_vector) / dot_product(left_vector, left_vector)), // point on back side
@@ -238,20 +244,27 @@ struct polygon : public object{
 			double distance = dot_product(plane_normal, i);
 			if(distance > 0){this_point = false; break;}
 			*/
+			/*
 			for(std::vector<point>& bound : plane){
 				vector a = bound[1] - bound[0], b = bound[2] - bound[0], cross = cross_product(a, b);
 				//double cross_mag = sqrt(cross.x * cross.x + cross.y * cross.y + cross.z * cross.z);
             	//cross.x /= cross_mag, cross.y /= cross_mag, cross.z /= cross_mag;
 				double distance = dot_product(cross, i);
+				//assuming < 0 is pointing out for some reason
 				if(distance < 0){
 					this_point = false; 
 					break;
 				}
 			}
 			if(this_point){std::cout << "polygon in frustum real\n"; return true;}
-        }
+			*/
+			//assuming again
+			double left_distance = plane_distance(plane[0], i), right_distance = plane_distance(plane[1], i),
+				   top_distance = plane_distance(plane[2], i), bottom_distance = plane_distance(plane[3], i);
+        	if(left_distance > 0 || right_distance > 0 || top_distance > 0 || bottom_distance > 0) return true;
+		}
 		//std::cout << "EVICTION ALERT!!!\n";
-        return false;	
+        return false;
     }
 private:
     vector a, b, c;
