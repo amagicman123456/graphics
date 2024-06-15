@@ -68,12 +68,21 @@ inline vector cross_product(vector a, vector b){
 inline double dot_product(vector a, vector b){
     return a.x * b.x + a.y * b.y + a.z * b.z;
 }
+typedef std::vector<point> plane;
+typedef std::vector<plane> plane_array;
 struct object{
+	//todo: make a bunch of stuff const instead
     virtual std::pair<bool, double> hit(vector u) = 0;
-    virtual bool is_in_frustum(std::vector<std::vector<point>> plane) = 0;
+    virtual bool is_in_frustum(plane_array& plane) = 0;
     virtual void set_color(color c){clr = c;}
     color clr;
 };
+double plane_distance(plane bound, point p){ 
+	vector a = bound[1] - bound[0], b = bound[2] - bound[0], cross = cross_product(a, b);
+	double cross_mag = sqrt(cross.x * cross.x + cross.y * cross.y + cross.z * cross.z);
+	cross.x /= cross_mag, cross.y /= cross_mag, cross.z /= cross_mag;
+	return dot_product(cross, p);
+}
 struct sphere : public object{
     double radius;
     point center;
@@ -103,7 +112,7 @@ struct sphere : public object{
 		if(determinant < 0) return std::pair<bool, double>(false, 0);
 		return std::pair<bool, double>(true, -dot - sqrt(determinant));
 	}
-    bool is_in_frustum(std::vector<std::vector<point>> plane) override{
+    bool is_in_frustum(plane_array& plane) override{
         /* todo: i guess change vector(0, -1, 0) to the correct vector for all pitch_angle_radians (up and down)
 		// fabricate a back side
 		vector left_vector = plane[2][0] - plane[2][1], // vector pointing left from top right to top left
@@ -119,6 +128,7 @@ struct sphere : public object{
         //corner case: sphere near (top or bottom) and (left or right) ex. near bottom and left is bottom-left
         //middle case: sphere near a side and is bounded by its two adjacent sides ex. sphere near bottom and bounded by left and right
 		
+		#if 0
 		for(/*int c = 0; c < (int)plane.size(); ++c*/ std::vector<point>& bound : plane){
             vector a = bound/*plane[c]*/[1] - bound/*plane[c]*/[0], b = bound/*plane[c]*/[2] - bound/*plane[c]*/[0], cross = cross_product(a, b);
 
@@ -131,8 +141,30 @@ struct sphere : public object{
 			double distance = dot_product(cross, center);
             if(abs_val(distance) < radius){/*std::cout << "tru moo: " << distance << '\n';*/ return true;}
         }
+		
         return false;
-    }
+		#else
+    	//todo: fix returning true when sphere isnt in frustum 
+        //corner case: sphere with distance less than radius / sqrt(2) or radius * 0.707106871 to (top or bottom) and (left or right) and vise versa ex. near bottom and left is bottom-left
+        //middle case: sphere near a side and is bounded by its two adjacent sides ex. sphere near bottom and bounded by left and right
+		//assuming plane[0] is left, plane[1] is right, plane[2] is top, plane[3] is bottom
+		double left_distance = plane_distance(plane[0], center), right_distance = plane_distance(plane[1], center),
+			   top_distance = plane_distance(plane[2], center), bottom_distance = plane_distance(plane[3], center);
+		double corner_distance = radius * 0.707/*106871*/;
+		//assuming > 0 is pointing in for some reason idk
+		return(
+			(left_distance > 0 && right_distance > 0 && top_distance > 0 && bottom_distance > 0)
+			||
+			(left_distance < 0 && left_distance > -radius && ((/*middle*/top_distance > 0 && bottom_distance > 0) || (/*corner*/top_distance > -corner_distance || bottom_distance > -corner_distance)))
+			||
+			(right_distance < 0 && right_distance > -radius && ((/*middle*/top_distance > 0 && bottom_distance > 0) || (/*corner*/top_distance > -corner_distance || bottom_distance > -corner_distance)))
+			||
+			(top_distance < 0 && top_distance > -radius && ((/*middle*/left_distance > 0 && right_distance > 0) || (/*corner*/left_distance > -corner_distance || right_distance > -corner_distance)))
+			||
+			(bottom_distance < 0 && bottom_distance > -radius && ((/*middle*/left_distance > 0 && right_distance > 0) || (/*corner*/left_distance > -corner_distance || right_distance > -corner_distance)))
+		);
+		#endif
+	}
 };
 struct polygon : public object{
     std::vector<point> points{};
@@ -207,9 +239,8 @@ struct polygon : public object{
                     inside = !inside;
         return std::pair<bool, double>(inside, distance);
     }
-    bool is_in_frustum(std::vector<std::vector<point>> plane) override{
+    bool is_in_frustum(plane_array& plane) override{
 		for(point& i : points){
-			bool this_point = true;
 			/*
 			vector left_vector = plane[2][0] - plane[2][1], // vector pointing left from top right to top left
 				   projection = left_vector * (dot_product(plane[2][1], left_vector) / dot_product(left_vector, left_vector)), // point on back side
@@ -217,20 +248,27 @@ struct polygon : public object{
 			double distance = dot_product(plane_normal, i);
 			if(distance > 0){this_point = false; break;}
 			*/
+			/*
 			for(std::vector<point>& bound : plane){
 				vector a = bound[1] - bound[0], b = bound[2] - bound[0], cross = cross_product(a, b);
 				//double cross_mag = sqrt(cross.x * cross.x + cross.y * cross.y + cross.z * cross.z);
             	//cross.x /= cross_mag, cross.y /= cross_mag, cross.z /= cross_mag;
 				double distance = dot_product(cross, i);
+				//assuming < 0 is pointing out for some reason
 				if(distance < 0){
 					this_point = false; 
 					break;
 				}
 			}
-			if(this_point){/*std::cout << "polygon in frustum real\n";*/ return true;}
-        }
+			if(this_point){std::cout << "polygon in frustum real\n"; return true;}
+			*/
+			//assuming again
+			double left_distance = plane_distance(plane[0], i), right_distance = plane_distance(plane[1], i),
+				   top_distance = plane_distance(plane[2], i), bottom_distance = plane_distance(plane[3], i);
+        	if(left_distance > 0 || right_distance > 0 || top_distance > 0 || bottom_distance > 0) return true;
+		}
 		//std::cout << "EVICTION ALERT!!!\n";
-        return false;	
+        return false;
     }
 private:
     vector a, b, c;
@@ -295,7 +333,7 @@ struct doughnut : public object{
         //return std::pair<bool, double>(!(p > 0 || g > 0), 100);
         return std::pair<bool, double>(p < 0 && g < 0, 100);
     }
-    bool is_in_frustum(std::vector<std::vector<point>> plane) override{
+    bool is_in_frustum(plane_array& plane) override{
         return true; //for now
     }
 private:
@@ -359,11 +397,12 @@ std::function<void()> render =
 			}
 		}
 	}
-	std::vector<std::vector<point>> plane{
+	plane_array plane{
         {bounding[0], bounding[2], point(0, 0, 0)}, //left
 		{bounding[3], bounding[1], point(0, 0, 0)}, //right
 		{bounding[1], bounding[0], point(0, 0, 0)}, //top
         {bounding[2], bounding[3], point(0, 0, 0)}, //bottom
+		//todo: add back plane and maybe front
     };
     //todo: in is_in_frustum() for every object, find the distance from either the center or all points to each plane, and check if any part of the shape is inside
 	#if __cplusplus >= 202002L
