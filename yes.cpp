@@ -113,17 +113,18 @@ struct sphere : public object{
 		return std::pair<bool, double>(true, -dot - sqrt(determinant));
 	}
     bool is_in_frustum(plane_array& plane) override{
-        /* todo: i guess change vector(0, -1, 0) to the correct vector for all pitch_angle_radians (up and down)
+		#if 0
+		//todo: i guess change vector(0, -1, 0) to the correct vector for all pitch_angle_radians too (up and down)
 		// fabricate a back side
 		vector left_vector = plane[2][0] - plane[2][1], // vector pointing left from top right to top left
 			   projection = left_vector * (dot_product(plane[2][1], left_vector) / dot_product(left_vector, left_vector)), // point on back side
-			   plane_normal = cross_product(left_vector, vector(0, -1, 0)); // calculate normal facing back
+			   plane_normal = cross_product(left_vector /* should it be projection? */, vector(0, -1, 0)); // calculate normal facing back
 		//double plane_normal_mag = sqrt(plane_normal.x * plane_normal.x + plane_normal.y * plane_normal.y + plane_normal.z * plane_normal.z);
         //plane_normal.x /= plane_normal_mag, plane_normal.y /= plane_normal_mag, plane_normal.z /= plane_normal_mag;
 		double distance = dot_product(plane_normal, center);
 		//todo: might not be exactly when its on the other side idk
 		if(distance > 0){std::cout << "nah fam\n"; return false;}
-		*/
+		#endif
 		#if 0
 		for(/*int c = 0; c < (int)plane.size(); ++c*/ std::vector<point>& bound : plane){
             vector a = bound/*plane[c]*/[1] - bound/*plane[c]*/[0], b = bound/*plane[c]*/[2] - bound/*plane[c]*/[0], cross = cross_product(a, b);
@@ -213,9 +214,10 @@ struct polygon : public object{
     };
     std::pair<bool, double> hit(vector u) override{
         //todo: do the same thing for u.x and u.y
-        for(const point& i : points)
+        
+		for(const point& i : points)
             if((u.z < 0 && i.z < 0) || (u.z > 0 && i.z > 0)) goto polygon_start;
-        return std::pair<bool, double>(false, 0);
+       	return std::pair<bool, double>(false, 0);
         polygon_start:
 
         double e = u.x * c.x + u.y * c.y + u.z * c.z;
@@ -294,7 +296,8 @@ struct polygon : public object{
 			//assuming again
 			double left_distance = plane_distance(plane[0], i), right_distance = plane_distance(plane[1], i),
 				   top_distance = plane_distance(plane[2], i), bottom_distance = plane_distance(plane[3], i);
-        	if(left_distance > 0 || right_distance > 0 || top_distance > 0 || bottom_distance > 0) return true;
+        	if(left_distance > 0 && right_distance > 0 && top_distance > 0 && bottom_distance > 0) return true;
+			//if(left_distance > 0 || right_distance > 0 || top_distance > 0 || bottom_distance > 0) return true;
 		}
 		//std::cout << "EVICTION ALERT!!!\n";
         return false;
@@ -400,10 +403,9 @@ std::function<void()> render =
         point(-width / 2.0, -height / 2.0, z), //bottom left
         point(width / 2.0, -height / 2.0, z) //bottom right
     };
-	bool ypr = /*yaw_angle_radians*/ abs_val(fmod(yaw_angle_radians, M_PI)) > 0.01 || 
-			   /*pitch_angle_radians*/ abs_val(fmod(pitch_angle_radians, M_PI)) > 0.01 || 
+	bool ypr = /*yaw_angle_radians*/ abs_val(fmod(yaw_angle_radians, M_PI)) > 0.01 ||
+			   /*pitch_angle_radians*/ abs_val(fmod(pitch_angle_radians, M_PI)) > 0.01 ||
 			   /*roll_angle_radians*/ abs_val(fmod(roll_angle_radians, M_PI)) > 0.01;
-	//facing away pitch is reversed for some reason, and sphere shows 180 degrees rotated with pitch
 	if(ypr){
 		for(point& i : bounding){
 			if(yaw_angle_radians){
@@ -426,11 +428,17 @@ std::function<void()> render =
 			}
 		}
 	}
+	//todo: i guess change vector(0, -1, 0) to the correct vector for all pitch_angle_radians too (up and down)
+	// fabricate a back side
+	vector left_vector = bounding[0] - bounding[1], // vector pointing left from top right to top left
+		   projection = left_vector * (dot_product(bounding[0], left_vector) / dot_product(left_vector, left_vector)); // point on back side
+
 	plane_array plane{
         {bounding[0], bounding[2], point(0, 0, 0)}, //left
 		{bounding[3], bounding[1], point(0, 0, 0)}, //right
 		{bounding[1], bounding[0], point(0, 0, 0)}, //top
         {bounding[2], bounding[3], point(0, 0, 0)}, //bottom
+		{point(0, 0, 0), projection, point(0, -1, 0) /*fix*/}, //back test	
 		//todo: add back plane and maybe front
     };
     //todo: in is_in_frustum() for every object, find the distance from either the center or all points to each plane, and check if any part of the shape is inside
@@ -581,7 +589,34 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
 					break;
 			}
         	break;
-        case WM_TIMER:
+        #if 0
+		case WM_LBUTTONDOWN:
+			int x = GET_X_LPARAM(l), y = GET_Y_LPARAM(l);
+			vector v(); //todo: get correct values
+			object* smallest = can_hit[0];
+			std::pair<bool, double> hit_b = smallest->hit(v);
+			bool hit_nothing = !hit_b.first, small_change = false;
+			//todo: likely and unlikely might be unnecessary
+			for(int w = 1; w < (int)can_hit.size(); ++w){
+				//if(comp(hit_nothing, v, world[i], smallest)) smallest = world[i];
+				std::pair<bool, double> hit_a = can_hit[w]->hit(v);				
+				if(small_change) hit_b = smallest->hit(v), small_change = false;
+
+				if(unlikely(hit_a.first)){
+					hit_nothing = false;
+					if(unlikely(hit_b.first)){
+						if(hit_a.second < hit_b.second)
+							smallest = can_hit[w], small_change = true;
+					}
+					else smallest = can_hit[w], small_change = true;
+				}
+				else hit_nothing = !hit_b.first;
+			}
+			if(likely(hit_nothing)) std::cout << "you clicked nothing.\n";
+			else std::cout << "you clicked something!\n";
+			break;
+		#endif
+		case WM_TIMER:
             InvalidateRgn(hwnd, 0, 0);
             UpdateWindow(hwnd);
             break;
