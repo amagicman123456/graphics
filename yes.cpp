@@ -148,17 +148,50 @@ struct sphere : public object{
 			   top_distance = plane_distance(plane[2], center), bottom_distance = plane_distance(plane[3], center);
 		double corner_distance = radius * 0.707/*106871*/;
 		//assuming > 0 is pointing in for some reason idk
+		#if 1
 		return(
 			(left_distance > 0 && right_distance > 0 && top_distance > 0 && bottom_distance > 0)
 			||
+			//todo: combine left and right
+			#if 1
 			(left_distance < 0 && left_distance > -radius && ((/*middle*/top_distance > 0 && bottom_distance > 0) || (/*corner*/top_distance > -corner_distance || bottom_distance > -corner_distance)))
 			||
 			(right_distance < 0 && right_distance > -radius && ((/*middle*/top_distance > 0 && bottom_distance > 0) || (/*corner*/top_distance > -corner_distance || bottom_distance > -corner_distance)))
+			#else
+			(((left_distance < 0 && left_distance > -radius) || (right_distance < 0 && right_distance > -radius)) && ((/*middle*/top_distance > 0 && bottom_distance > 0) || (/*corner*/top_distance > -corner_distance || bottom_distance > -corner_distance)))
+			#endif
 			||
+			//todo: combine top and bottom
+			#if 1
 			(top_distance < 0 && top_distance > -radius && ((/*middle*/left_distance > 0 && right_distance > 0) || (/*corner*/left_distance > -corner_distance || right_distance > -corner_distance)))
 			||
 			(bottom_distance < 0 && bottom_distance > -radius && ((/*middle*/left_distance > 0 && right_distance > 0) || (/*corner*/left_distance > -corner_distance || right_distance > -corner_distance)))
+			#else
+			(((top_distance < 0 && top_distance > -radius) || (bottom_distance < 0 && bottom_distance > -radius)) && ((/*middle*/left_distance > 0 && right_distance > 0) || (/*corner*/left_distance > -corner_distance || right_distance > -corner_distance)))
+			#endif
 		);
+		#else
+			bool a = (
+				#if 1
+				(left_distance > 0 && right_distance > 0 && top_distance > 0 && bottom_distance > 0)
+				||
+				(right_distance < 0 && right_distance > -radius && ((/*middle*/top_distance > 0 && bottom_distance > 0) || (/*corner*/top_distance > -corner_distance || bottom_distance > -corner_distance)))
+				#else // doesnt work here for some reason
+				(((left_distance < 0 && left_distance > -radius) || (right_distance < 0 && right_distance > -radius)) && ((/*middle*/top_distance > 0 && bottom_distance > 0) || (/*corner*/top_distance > -corner_distance || bottom_distance > -corner_distance)))
+				#endif
+				||
+				//todo: combine top and bottom
+				#if 1
+				(top_distance < 0 && top_distance > -radius && ((/*middle*/left_distance > 0 && right_distance > 0) || (/*corner*/left_distance > -corner_distance || right_distance > -corner_distance)))
+				||
+				(bottom_distance < 0 && bottom_distance > -radius && ((/*middle*/left_distance > 0 && right_distance > 0) || (/*corner*/left_distance > -corner_distance || right_distance > -corner_distance)))
+				#else // doesnt work here for some reason
+				(((top_distance < 0 && top_distance > -radius) || (bottom_distance < 0 && bottom_distance > -radius)) && ((/*middle*/left_distance > 0 && right_distance > 0) || (/*corner*/left_distance > -corner_distance || right_distance > -corner_distance)))
+				#endif
+			);
+			std::cout << std::boolalpha << a << '\n';
+			return a;
+		#endif
 		#endif
 	}
 };
