@@ -392,61 +392,78 @@ std::vector<object*> world = {&s, &p
 , &d};
 #endif
 double z = width / (2 * tan(horizontal_fov / 2));
+typedef std::function<void(std::vector<object*>&, plane_array&, bool&)> plane_setup_type;
+struct lambda_destructor{
+public:
+    plane_setup_type &lambda, after;
+    lambda_editor(plane_setup_type& l, plane_setup_type a) : lambda(l) : after(a){}
+    ~lambda_editor(){lambda = a;}
+};
+plane_setup_type plane_setup;
 std::function<void()> render =
 [](){
 	++f;
     //todo: use the gpu for calculations
-	std::vector<object*> can_hit = world; // copy
-    point bounding[4]{
-        point(-width / 2.0, height / 2.0, z), //upper left
-        point(width / 2.0, height / 2.0, z), //upper right
-        point(-width / 2.0, -height / 2.0, z), //bottom left
-        point(width / 2.0, -height / 2.0, z) //bottom right
+	std::vector<object*> can_hit; // copy
+    point_array plane;
+    bool ypr;
+    //for clicks
+    plane_setup_type create_plane = [&world, &yaw_angle_radians, &pitch_angle_radians, &roll_angle_radians](std::vector<object*>& can_hit, plane_array& plane, bool& ypr){
+        can_hit = world;
+        point bounding[4]{
+            point(-width / 2.0, height / 2.0, z), //upper left
+            point(width / 2.0, height / 2.0, z), //upper right
+            point(-width / 2.0, -height / 2.0, z), //bottom left
+            point(width / 2.0, -height / 2.0, z) //bottom right
+        };
+        ypr = /*yaw_angle_radians*/ abs_val(fmod(yaw_angle_radians, M_PI)) > 0.01 ||
+    			   /*pitch_angle_radians*/ abs_val(fmod(pitch_angle_radians, M_PI)) > 0.01 ||
+    			   /*roll_angle_radians*/ abs_val(fmod(roll_angle_radians, M_PI)) > 0.01;
+    	if(ypr){
+    		for(point& i : bounding){
+    			if(yaw_angle_radians){
+    				double cos_yar = cos(yaw_angle_radians), sin_yar = sin(yaw_angle_radians), sin_yar_x = sin_yar * i.x;
+    				i.x = cos_yar * i.x + sin_yar * i.z;
+    				i.z = -sin_yar_x + cos_yar * i.z;
+    			}
+    			if(pitch_angle_radians){
+    				//todo: check if pitch is actually correct (make it so positive always migrates to top instead of going in circles)
+    				//pitch_angle_radians = i.z < 0 ? -pitch_angle_radians : (double)pitch_angle_radians;
+    				double cos_par = cos(pitch_angle_radians), sin_par = sin(pitch_angle_radians), sin_par_y = sin_par * i.y;
+    				i.y = cos_par * i.y - sin_par * i.z;
+    				i.z = sin_par_y + cos_par * i.z;
+    			}
+    			if(roll_angle_radians){
+    				//todo: check if roll is actually correct
+    				double cos_rar = cos(roll_angle_radians), sin_rar = sin(roll_angle_radians), sin_rar_x = sin_rar * i.x;
+    				i.x = cos_rar * i.x - sin_rar * i.y;
+    				i.y = sin_rar_x + cos_rar * i.y;
+    			}
+    		}
+    	}
+    	//todo: i guess change vector(0, -1, 0) to the correct vector for all pitch_angle_radians too (up and down)
+    	// fabricate a back side
+    	vector left_vector = bounding[0] - bounding[1], // vector pointing left from top right to top left
+    		   projection = left_vector * (dot_product(bounding[0], left_vector) / dot_product(left_vector, left_vector)); // point on back side
+    
+        plane = {
+            {bounding[0], bounding[2], point(0, 0, 0)}, //left
+    		{bounding[3], bounding[1], point(0, 0, 0)}, //right
+    		{bounding[1], bounding[0], point(0, 0, 0)}, //top
+            {bounding[2], bounding[3], point(0, 0, 0)}, //bottom
+    		{point(0, 0, 0), projection, point(0, -1, 0) /*fix*/}, //back test	
+    		//todo: add back plane and maybe front
+        };
+        //todo: in is_in_frustum() for every object, find the distance from either the center or all points to each plane, and check if any part of the shape is inside
+    	#if __cplusplus >= 202002L
+            std::erase_if(can_hit, [&plane](object* i){return !i->is_in_frustum(plane);});
+        #else
+            can_hit.erase(std::remove_if(can_hit.begin(), can_hit.end(), [&plane](object* i){return !i->is_in_frustum(plane);}), can_hit.end());
+        #endif
     };
-	bool ypr = /*yaw_angle_radians*/ abs_val(fmod(yaw_angle_radians, M_PI)) > 0.01 ||
-			   /*pitch_angle_radians*/ abs_val(fmod(pitch_angle_radians, M_PI)) > 0.01 ||
-			   /*roll_angle_radians*/ abs_val(fmod(roll_angle_radians, M_PI)) > 0.01;
-	if(ypr){
-		for(point& i : bounding){
-			if(yaw_angle_radians){
-				double cos_yar = cos(yaw_angle_radians), sin_yar = sin(yaw_angle_radians), sin_yar_x = sin_yar * i.x;
-				i.x = cos_yar * i.x + sin_yar * i.z;
-				i.z = -sin_yar_x + cos_yar * i.z;
-			}
-			if(pitch_angle_radians){
-				//todo: check if pitch is actually correct (make it so positive always migrates to top instead of going in circles)
-				//pitch_angle_radians = i.z < 0 ? -pitch_angle_radians : (double)pitch_angle_radians;
-				double cos_par = cos(pitch_angle_radians), sin_par = sin(pitch_angle_radians), sin_par_y = sin_par * i.y;
-				i.y = cos_par * i.y - sin_par * i.z;
-				i.z = sin_par_y + cos_par * i.z;
-			}
-			if(roll_angle_radians){
-				//todo: check if roll is actually correct
-				double cos_rar = cos(roll_angle_radians), sin_rar = sin(roll_angle_radians), sin_rar_x = sin_rar * i.x;
-				i.x = cos_rar * i.x - sin_rar * i.y;
-				i.y = sin_rar_x + cos_rar * i.y;
-			}
-		}
-	}
-	//todo: i guess change vector(0, -1, 0) to the correct vector for all pitch_angle_radians too (up and down)
-	// fabricate a back side
-	vector left_vector = bounding[0] - bounding[1], // vector pointing left from top right to top left
-		   projection = left_vector * (dot_product(bounding[0], left_vector) / dot_product(left_vector, left_vector)); // point on back side
-
-	plane_array plane{
-        {bounding[0], bounding[2], point(0, 0, 0)}, //left
-		{bounding[3], bounding[1], point(0, 0, 0)}, //right
-		{bounding[1], bounding[0], point(0, 0, 0)}, //top
-        {bounding[2], bounding[3], point(0, 0, 0)}, //bottom
-		{point(0, 0, 0), projection, point(0, -1, 0) /*fix*/}, //back test	
-		//todo: add back plane and maybe front
-    };
-    //todo: in is_in_frustum() for every object, find the distance from either the center or all points to each plane, and check if any part of the shape is inside
-	#if __cplusplus >= 202002L
-        std::erase_if(can_hit, [&plane](object* i){return !i->is_in_frustum(plane);});
-    #else
-        can_hit.erase(std::remove_if(can_hit.begin(), can_hit.end(), [&plane](object* i){return !i->is_in_frustum(plane);}), can_hit.end());
-    #endif
+    create_plane(can_hit, plane, ypr);
+    plane_setup = [&](std::vector<object*>& c, plane_array& p, bool& yp){c = can_hit, p = plane, ypr = yp;};
+    lambda_destructor(plane_setup, create_plane);
 	if(!can_hit.size()){
 		for(int i = 0; i < width_px * height_px; ++i) framebuf[i] = RGB(255, 255, 255);
 		return;
@@ -591,6 +608,11 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
         	break;
         #if 0
 		case WM_LBUTTONDOWN:
+            std::vector<object*> can_hit;
+            point_array plane;
+            bool ypr;
+            plane_setup(can_hit, plane, ypr);
+            //find increment values and stuff
 			int x = GET_X_LPARAM(l), y = GET_Y_LPARAM(l);
 			vector v(); //todo: get correct values
 			object* smallest = can_hit[0];
@@ -615,7 +637,7 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
 			if(likely(hit_nothing)) std::cout << "you clicked nothing.\n";
 			else std::cout << "you clicked something!\n";
 			break;
-		#endif
+        #endif
 		case WM_TIMER:
             InvalidateRgn(hwnd, 0, 0);
             UpdateWindow(hwnd);
