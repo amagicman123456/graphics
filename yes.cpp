@@ -18,13 +18,8 @@ void fps(void*){
         Sleep(1000);
         std::cout << f << '\n';
         f = 0;
-
-        //yaw_angle_radians = yaw_angle_radians + 0.175;
-        //pitch_angle_radians = pitch_angle_radians + 0.175;
-        //roll_angle_radians = roll_angle_radians + 0.175;
     }
 }
-//int width = 1200, height = 600, tick_count, *framebuf;
 int width_px = 1200, height_px = 600, tick_count, *framebuf;
 double width = 1, height = height_px / (double)width_px,
        pixel_inc = width / width_px;
@@ -72,7 +67,6 @@ inline double dot_product(vector a, vector b){
 typedef std::vector<point> plane;
 typedef std::vector<plane> plane_array;
 struct object{
-	//todo: make a bunch of stuff const instead
     virtual std::pair<bool, double> hit(vector u) const = 0;
     virtual bool is_in_frustum(const plane_array& plane) const = 0;
     virtual void set_color(const color c){clr = c;}
@@ -95,7 +89,6 @@ struct sphere : public object{
 	virtual void set_name(const char* str){name = str;}
     std::pair<bool, double> hit(vector u) const override{
         //todo: do the same thing for u.x and u.y
-        //in is_in_frustum now
 		if((u.z > 0 && center.z < radius) || (u.z < 0 && center.z > radius)) return std::pair<bool, double>(false, 0);
 		/*	
         double magnitude_squared = u.x * u.x + u.y * u.y + u.z * u.z;
@@ -152,7 +145,7 @@ struct sphere : public object{
 		//assuming plane[0] is left, plane[1] is right, plane[2] is top, plane[3] is bottom
 		double left_distance = plane_distance(plane[0], center), right_distance = plane_distance(plane[1], center),
 			   top_distance = plane_distance(plane[2], center), bottom_distance = plane_distance(plane[3], center);
-		double corner_distance = radius * 0.707/*106871*/;
+		double corner_distance = radius * 0.707;
 		//assuming > 0 is pointing in for some reason idk
 		#if 1
 		return(
@@ -314,7 +307,6 @@ struct polygon : public object{
 			double left_distance = plane_distance(plane[0], i), right_distance = plane_distance(plane[1], i),
 				   top_distance = plane_distance(plane[2], i), bottom_distance = plane_distance(plane[3], i);
         	if(left_distance > 0 && right_distance > 0 && top_distance > 0 && bottom_distance > 0) return true;
-			//if(left_distance > 0 || right_distance > 0 || top_distance > 0 || bottom_distance > 0) return true;
 		}
 		//std::cout << "EVICTION ALERT!!!\n";
         return false;
@@ -429,12 +421,12 @@ std::function<void()> render =
 [](){
 	++f;
     //todo: use the gpu for calculations
-	std::vector<object_pointer> can_hit; // copy
+	std::vector<object_pointer> can_hit;
     plane_array plane;
     bool ypr;
     //for clicks and stuff
     plane_setup_type create_plane = [](std::vector<object_pointer>& can_hit, plane_array& plane, bool& ypr){
-        can_hit = world;
+        can_hit = world; // copy
         point bounding[4]{
             point(-width / 2.0, height / 2.0, z), //upper left
             point(width / 2.0, height / 2.0, z), //upper right
@@ -453,7 +445,6 @@ std::function<void()> render =
     			}
     			if(pitch_angle_radians){
     				//todo: check if pitch is actually correct (make it so positive always migrates to top instead of going in circles)
-    				//pitch_angle_radians = i.z < 0 ? -pitch_angle_radians : (double)pitch_angle_radians;
     				double cos_par = cos(pitch_angle_radians), sin_par = sin(pitch_angle_radians), sin_par_y = sin_par * i.y;
     				i.y = cos_par * i.y - sin_par * i.z;
     				i.z = sin_par_y + cos_par * i.z;
@@ -479,7 +470,6 @@ std::function<void()> render =
     		{point(0, 0, 0), projection, point(0, -1, 0) /*fix*/}, //back test	
     		//todo: add back plane and maybe front
         };
-        //todo: in is_in_frustum() for every object, find the distance from either the center or all points to each plane, and check if any part of the shape is inside
     	#if __cplusplus >= 202002L
             std::erase_if(can_hit, [&plane](object_pointer i){return !i->is_in_frustum(plane);});
         #else
@@ -487,7 +477,7 @@ std::function<void()> render =
         #endif
 	};
     create_plane(can_hit, plane, ypr);
-    plane_setup = [&](std::vector<object_pointer>& c, plane_array& p, bool& yp){c = can_hit, p = plane, ypr = yp;};
+    plane_setup = [&](std::vector<object_pointer>& c, plane_array& p, bool& yp){c = can_hit, p = plane, yp = ypr;};
     lambda_destructor<plane_setup_type>(plane_setup, create_plane);
 	if(!can_hit.size()){
 		for(int i = 0; i < width_px * height_px; ++i) framebuf[i] = RGB(255, 255, 255);
@@ -500,8 +490,6 @@ std::function<void()> render =
 			double row_vx = start.x, row_vy = start.y, row_vz = start.z;
 			int prev = jpx * width_px;
 			for(int ipx = 0; ipx < width_px; row_vx += row_inc.x, row_vy += row_inc.y, row_vz += row_inc.z, ++ipx){
-				//double vx = -width / 2.0 + i;
-				//double vy = height / 2.0 - j;
 				int index = prev + ipx;
 				vector v(row_vx, -row_vy, row_vz);
 				object_pointer smallest = can_hit[0];
@@ -637,7 +625,6 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
             plane_array plane;
             bool ypr;
             plane_setup(can_hit, plane, ypr);
-            //find increment values and stuff
 			vector v;
 			if(ypr){
 				vector start = plane[0][0]; //start at top left
