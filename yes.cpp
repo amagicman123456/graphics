@@ -72,7 +72,7 @@ struct object{
     virtual void set_color(const color c){clr = c;}
     color clr;
 	virtual void set_name(const char* str){name = str;}
-	const char* name;
+	const char *class_name, *name;
 };
 typedef object* object_pointer; //maybe change it to unique_ptr or shared_ptr idk
 double plane_distance(const plane& bound, const point& p){ 
@@ -84,9 +84,10 @@ double plane_distance(const plane& bound, const point& p){
 struct sphere : public object{
     double radius;
     point center;
-    sphere(color cl, double r, point c, const char* n = "sphere") : radius(r), center(c){set_color(cl), set_name(n);}
+    sphere(color cl, double r, point c, const char* n = "the default sphere") : radius(r), center(c){set_color(cl), set_class_name(), set_name(n);}
     virtual void set_color(const color c){clr = c;}
 	virtual void set_name(const char* str){name = str;}
+	virtual void set_class_name(){class_name = "sphere";}
     std::pair<bool, double> hit(vector u) const override{
         //todo: do the same thing for u.x and u.y
 		if((u.z > 0 && center.z < radius) || (u.z < 0 && center.z > radius)) return std::pair<bool, double>(false, 0);
@@ -198,6 +199,7 @@ struct polygon : public object{
     std::vector<point> points{};
     polygon(color cl, const char* n, auto... l) try /*: clr(cl)*/{
         set_color(cl);
+		set_class_name();
 		set_name(n);
         if(sizeof...(l) < 3) throw;
         points = {(point(l))...};
@@ -206,7 +208,8 @@ struct polygon : public object{
     }catch(...){std::cout << "error: number of points to polygon's constructor must be greater than two\n";}
 	polygon(color cl, auto... l) try /*: clr(cl)*/{
         set_color(cl);
-		set_name("polygon");
+		set_class_name();
+		set_name("the default polygon");
         if(sizeof...(l) < 3) throw;
         points = {(point(l))...};
         a = points[1] - points[0], b = points[2] - points[0], c = cross_product(a, b);
@@ -214,6 +217,7 @@ struct polygon : public object{
     }catch(...){std::cout << "error: number of points to polygon's constructor must be greater than two\n";}
 	virtual void set_color(const color c){clr = c;}
     virtual void set_name(const char* str){name = str;}
+	virtual void set_class_name(){class_name = "polygon";}
 	void stretch(const double& greatest, point& p) const{
         double factor = greatest / p.z;
         p.x *= factor;
@@ -307,6 +311,7 @@ struct polygon : public object{
 			double left_distance = plane_distance(plane[0], i), right_distance = plane_distance(plane[1], i),
 				   top_distance = plane_distance(plane[2], i), bottom_distance = plane_distance(plane[3], i);
         	if(left_distance > 0 && right_distance > 0 && top_distance > 0 && bottom_distance > 0) return true;
+			//todo: moving left once and down once makes the polygon disappear :(
 		}
 		//std::cout << "EVICTION ALERT!!!\n";
         return false;
@@ -321,11 +326,12 @@ struct doughnut : public object{
     double minor_radius, major_radius;
     double yaw_rad, pitch_rad;
     doughnut(color cl, double minor_r, double major_r, point c, double yaw = 0, double pitch = 0) :
-        center(c), minor_radius(minor_r), major_radius(major_r), yaw_rad(yaw), pitch_rad(pitch), epsilon(major_r * major_r - minor_r * minor_r){set_color(cl), set_name("doughnut");}
+        center(c), minor_radius(minor_r), major_radius(major_r), yaw_rad(yaw), pitch_rad(pitch), epsilon(major_r * major_r - minor_r * minor_r){set_color(cl), set_class_name(), set_name("the default doughnut");}
     doughnut(color cl, double minor_r, double major_r, point c, const char* n, double yaw = 0, double pitch = 0) :
-        center(c), minor_radius(minor_r), major_radius(major_r), yaw_rad(yaw), pitch_rad(pitch), epsilon(major_r * major_r - minor_r * minor_r){set_color(cl), set_name(n);}
+        center(c), minor_radius(minor_r), major_radius(major_r), yaw_rad(yaw), pitch_rad(pitch), epsilon(major_r * major_r - minor_r * minor_r){set_color(cl), set_class_name(), set_name(n);}
 	virtual void set_color(const color c){clr = c;}
     virtual void set_name(const char* str){name = str;}
+	virtual void set_class_name(){class_name = "doughnut";}
 	std::pair<bool, double> hit(vector u) const override{
         //u -= center; // todo: with a center other than the origin the donut does weird things
 		//already accounted for in formula but it still does weird things
@@ -383,9 +389,9 @@ struct doughnut : public object{
 private:
     double epsilon;
 };
-sphere s(RGB(0, 0, 255), sqrt(100000), point(100, 41.5, 2000));
+sphere s(RGB(0, 0, 255), sqrt(100000), point(100, 41.5, 2000), "the big red sphere");
 //doughnut d(RGB(0, 255, 0), 200, 300, point(100, 100, 5000));
-doughnut d(RGB(255, 0, 255), 90, 1500, point(0, 0, 0), 1.57, 1);
+doughnut d(RGB(255, 0, 255), 90, 1500, point(0, 0, 0), "the laggy doughnut", 1.57, 1);
 point p1(-250, -300, 2400), p2(250, 200, 1500), p3(350, -100, 1000)
 #ifdef QUAD
     , p4(-250, -100, 2000)
@@ -393,9 +399,9 @@ point p1(-250, -300, 2400), p2(250, 200, 1500), p3(350, -100, 1000)
 ;
 polygon p(RGB(0, 255, 0),
 #ifdef QUAD
-"quadrilateral"
+"the funny quadrilateral"
 #else
-"triangle"
+"the funny triangle"
 #endif
 , p1, p2, p3
 #ifdef QUAD
@@ -660,10 +666,10 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
 			else{
 				#ifdef SOUND
 				static char sound_name[256];
-				strncpy(sound_name, (std::string("sound/") + std::string(smallest->name) + std::string(".wav")).c_str(), 100);
+				strncpy(sound_name, (std::string("sound/") + std::string(smallest->class_name) + std::string(".wav")).c_str(), 100);
 				PlaySound(TEXT(sound_name), NULL, SND_FILENAME | SND_ASYNC);
 				#endif
-				std::cout << "you clicked on a " << smallest->name << "!\n";
+				std::cout << "you clicked on a " << smallest->class_name << " and its name is \'" << smallest->name << "\'!\n";
 			}
 			break;
 		}
