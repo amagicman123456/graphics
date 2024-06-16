@@ -1,3 +1,4 @@
+#include <windowsx.h>
 #include <windows.h>
 #include <process.h>
 #include <functional>
@@ -113,21 +114,18 @@ struct sphere : public object{
 		return std::pair<bool, double>(true, -dot - sqrt(determinant));
 	}
     bool is_in_frustum(plane_array& plane) override{
-        /* todo: i guess change vector(0, -1, 0) to the correct vector for all pitch_angle_radians (up and down)
+		#if 0
+		//todo: i guess change vector(0, -1, 0) to the correct vector for all pitch_angle_radians too (up and down)
 		// fabricate a back side
 		vector left_vector = plane[2][0] - plane[2][1], // vector pointing left from top right to top left
 			   projection = left_vector * (dot_product(plane[2][1], left_vector) / dot_product(left_vector, left_vector)), // point on back side
-			   plane_normal = cross_product(left_vector, vector(0, -1, 0)); // calculate normal facing back
+			   plane_normal = cross_product(left_vector /* should it be projection? */, vector(0, -1, 0)); // calculate normal facing back
 		//double plane_normal_mag = sqrt(plane_normal.x * plane_normal.x + plane_normal.y * plane_normal.y + plane_normal.z * plane_normal.z);
         //plane_normal.x /= plane_normal_mag, plane_normal.y /= plane_normal_mag, plane_normal.z /= plane_normal_mag;
 		double distance = dot_product(plane_normal, center);
 		//todo: might not be exactly when its on the other side idk
 		if(distance > 0){std::cout << "nah fam\n"; return false;}
-		*/
-		//todo: fix returning true when sphere isnt in frustum 
-        //corner case: sphere near (top or bottom) and (left or right) ex. near bottom and left is bottom-left
-        //middle case: sphere near a side and is bounded by its two adjacent sides ex. sphere near bottom and bounded by left and right
-		
+		#endif
 		#if 0
 		for(/*int c = 0; c < (int)plane.size(); ++c*/ std::vector<point>& bound : plane){
             vector a = bound/*plane[c]*/[1] - bound/*plane[c]*/[0], b = bound/*plane[c]*/[2] - bound/*plane[c]*/[0], cross = cross_product(a, b);
@@ -152,17 +150,50 @@ struct sphere : public object{
 			   top_distance = plane_distance(plane[2], center), bottom_distance = plane_distance(plane[3], center);
 		double corner_distance = radius * 0.707/*106871*/;
 		//assuming > 0 is pointing in for some reason idk
+		#if 1
 		return(
 			(left_distance > 0 && right_distance > 0 && top_distance > 0 && bottom_distance > 0)
 			||
+			//todo: combine left and right
+			#if 1
 			(left_distance < 0 && left_distance > -radius && ((/*middle*/top_distance > 0 && bottom_distance > 0) || (/*corner*/top_distance > -corner_distance || bottom_distance > -corner_distance)))
 			||
 			(right_distance < 0 && right_distance > -radius && ((/*middle*/top_distance > 0 && bottom_distance > 0) || (/*corner*/top_distance > -corner_distance || bottom_distance > -corner_distance)))
+			#else
+			(((left_distance < 0 && left_distance > -radius) || (right_distance < 0 && right_distance > -radius)) && ((/*middle*/top_distance > 0 && bottom_distance > 0) || (/*corner*/top_distance > -corner_distance || bottom_distance > -corner_distance)))
+			#endif
 			||
+			//todo: combine top and bottom
+			#if 1
 			(top_distance < 0 && top_distance > -radius && ((/*middle*/left_distance > 0 && right_distance > 0) || (/*corner*/left_distance > -corner_distance || right_distance > -corner_distance)))
 			||
 			(bottom_distance < 0 && bottom_distance > -radius && ((/*middle*/left_distance > 0 && right_distance > 0) || (/*corner*/left_distance > -corner_distance || right_distance > -corner_distance)))
+			#else
+			(((top_distance < 0 && top_distance > -radius) || (bottom_distance < 0 && bottom_distance > -radius)) && ((/*middle*/left_distance > 0 && right_distance > 0) || (/*corner*/left_distance > -corner_distance || right_distance > -corner_distance)))
+			#endif
 		);
+		#else
+			bool a = (
+				#if 1
+				(left_distance > 0 && right_distance > 0 && top_distance > 0 && bottom_distance > 0)
+				||
+				(right_distance < 0 && right_distance > -radius && ((/*middle*/top_distance > 0 && bottom_distance > 0) || (/*corner*/top_distance > -corner_distance || bottom_distance > -corner_distance)))
+				#else // doesnt work here for some reason
+				(((left_distance < 0 && left_distance > -radius) || (right_distance < 0 && right_distance > -radius)) && ((/*middle*/top_distance > 0 && bottom_distance > 0) || (/*corner*/top_distance > -corner_distance || bottom_distance > -corner_distance)))
+				#endif
+				||
+				//todo: combine top and bottom
+				#if 1
+				(top_distance < 0 && top_distance > -radius && ((/*middle*/left_distance > 0 && right_distance > 0) || (/*corner*/left_distance > -corner_distance || right_distance > -corner_distance)))
+				||
+				(bottom_distance < 0 && bottom_distance > -radius && ((/*middle*/left_distance > 0 && right_distance > 0) || (/*corner*/left_distance > -corner_distance || right_distance > -corner_distance)))
+				#else // doesnt work here for some reason
+				(((top_distance < 0 && top_distance > -radius) || (bottom_distance < 0 && bottom_distance > -radius)) && ((/*middle*/left_distance > 0 && right_distance > 0) || (/*corner*/left_distance > -corner_distance || right_distance > -corner_distance)))
+				#endif
+			);
+			std::cout << std::boolalpha << a << '\n';
+			return a;
+		#endif
 		#endif
 	}
 };
@@ -184,9 +215,10 @@ struct polygon : public object{
     };
     std::pair<bool, double> hit(vector u) override{
         //todo: do the same thing for u.x and u.y
-        for(const point& i : points)
+        
+		for(const point& i : points)
             if((u.z < 0 && i.z < 0) || (u.z > 0 && i.z > 0)) goto polygon_start;
-        return std::pair<bool, double>(false, 0);
+       	return std::pair<bool, double>(false, 0);
         polygon_start:
 
         double e = u.x * c.x + u.y * c.y + u.z * c.z;
@@ -265,7 +297,8 @@ struct polygon : public object{
 			//assuming again
 			double left_distance = plane_distance(plane[0], i), right_distance = plane_distance(plane[1], i),
 				   top_distance = plane_distance(plane[2], i), bottom_distance = plane_distance(plane[3], i);
-        	if(left_distance > 0 || right_distance > 0 || top_distance > 0 || bottom_distance > 0) return true;
+        	if(left_distance > 0 && right_distance > 0 && top_distance > 0 && bottom_distance > 0) return true;
+			//if(left_distance > 0 || right_distance > 0 || top_distance > 0 || bottom_distance > 0) return true;
 		}
 		//std::cout << "EVICTION ALERT!!!\n";
         return false;
@@ -360,56 +393,78 @@ std::vector<object*> world = {&s, &p
 , &d};
 #endif
 double z = width / (2 * tan(horizontal_fov / 2));
+typedef std::function<void(std::vector<object*>&, plane_array&, bool&)> plane_setup_type;
+template<typename T> struct lambda_destructor{
+public:
+    T &lambda, after;
+    lambda_destructor(T& l, T a) : lambda(l), after(a){}
+    ~lambda_destructor(){lambda = after;}
+};
+plane_setup_type plane_setup;
 std::function<void()> render =
 [](){
 	++f;
     //todo: use the gpu for calculations
-	std::vector<object*> can_hit = world; // copy
-    point bounding[4]{
-        point(-width / 2.0, height / 2.0, z), //upper left
-        point(width / 2.0, height / 2.0, z), //upper right
-        point(-width / 2.0, -height / 2.0, z), //bottom left
-        point(width / 2.0, -height / 2.0, z) //bottom right
-    };
-	bool ypr = /*yaw_angle_radians*/ abs_val(fmod(yaw_angle_radians, M_PI)) > 0.01 || 
-			   /*pitch_angle_radians*/ abs_val(fmod(pitch_angle_radians, M_PI)) > 0.01 || 
-			   /*roll_angle_radians*/ abs_val(fmod(roll_angle_radians, M_PI)) > 0.01;
-	//facing away pitch is reversed for some reason, and sphere shows 180 degrees rotated with pitch
-	if(ypr){
-		for(point& i : bounding){
-			if(yaw_angle_radians){
-				double cos_yar = cos(yaw_angle_radians), sin_yar = sin(yaw_angle_radians), sin_yar_x = sin_yar * i.x;
-				i.x = cos_yar * i.x + sin_yar * i.z;
-				i.z = -sin_yar_x + cos_yar * i.z;
-			}
-			if(pitch_angle_radians){
-				//todo: check if pitch is actually correct (make it so positive always migrates to top instead of going in circles)
-				//pitch_angle_radians = i.z < 0 ? -pitch_angle_radians : (double)pitch_angle_radians;
-				double cos_par = cos(pitch_angle_radians), sin_par = sin(pitch_angle_radians), sin_par_y = sin_par * i.y;
-				i.y = cos_par * i.y - sin_par * i.z;
-				i.z = sin_par_y + cos_par * i.z;
-			}
-			if(roll_angle_radians){
-				//todo: check if roll is actually correct
-				double cos_rar = cos(roll_angle_radians), sin_rar = sin(roll_angle_radians), sin_rar_x = sin_rar * i.x;
-				i.x = cos_rar * i.x - sin_rar * i.y;
-				i.y = sin_rar_x + cos_rar * i.y;
-			}
-		}
-	}
-	plane_array plane{
-        {bounding[0], bounding[2], point(0, 0, 0)}, //left
-		{bounding[3], bounding[1], point(0, 0, 0)}, //right
-		{bounding[1], bounding[0], point(0, 0, 0)}, //top
-        {bounding[2], bounding[3], point(0, 0, 0)}, //bottom
-		//todo: add back plane and maybe front
-    };
-    //todo: in is_in_frustum() for every object, find the distance from either the center or all points to each plane, and check if any part of the shape is inside
-	#if __cplusplus >= 202002L
-        std::erase_if(can_hit, [&plane](object* i){return !i->is_in_frustum(plane);});
-    #else
-        can_hit.erase(std::remove_if(can_hit.begin(), can_hit.end(), [&plane](object* i){return !i->is_in_frustum(plane);}), can_hit.end());
-    #endif
+	std::vector<object*> can_hit; // copy
+    plane_array plane;
+    bool ypr;
+    //for clicks and stuff
+    plane_setup_type create_plane = [](std::vector<object*>& can_hit, plane_array& plane, bool& ypr){
+        can_hit = world;
+        point bounding[4]{
+            point(-width / 2.0, height / 2.0, z), //upper left
+            point(width / 2.0, height / 2.0, z), //upper right
+            point(-width / 2.0, -height / 2.0, z), //bottom left
+            point(width / 2.0, -height / 2.0, z) //bottom right
+        };
+        ypr = /*yaw_angle_radians*/ abs_val(fmod(yaw_angle_radians, M_PI)) > 0.01 ||
+    			   /*pitch_angle_radians*/ abs_val(fmod(pitch_angle_radians, M_PI)) > 0.01 ||
+    			   /*roll_angle_radians*/ abs_val(fmod(roll_angle_radians, M_PI)) > 0.01;
+    	if(ypr){
+    		for(point& i : bounding){
+    			if(yaw_angle_radians){
+    				double cos_yar = cos(yaw_angle_radians), sin_yar = sin(yaw_angle_radians), sin_yar_x = sin_yar * i.x;
+    				i.x = cos_yar * i.x + sin_yar * i.z;
+    				i.z = -sin_yar_x + cos_yar * i.z;
+    			}
+    			if(pitch_angle_radians){
+    				//todo: check if pitch is actually correct (make it so positive always migrates to top instead of going in circles)
+    				//pitch_angle_radians = i.z < 0 ? -pitch_angle_radians : (double)pitch_angle_radians;
+    				double cos_par = cos(pitch_angle_radians), sin_par = sin(pitch_angle_radians), sin_par_y = sin_par * i.y;
+    				i.y = cos_par * i.y - sin_par * i.z;
+    				i.z = sin_par_y + cos_par * i.z;
+    			}
+    			if(roll_angle_radians){
+    				//todo: check if roll is actually correct
+    				double cos_rar = cos(roll_angle_radians), sin_rar = sin(roll_angle_radians), sin_rar_x = sin_rar * i.x;
+    				i.x = cos_rar * i.x - sin_rar * i.y;
+    				i.y = sin_rar_x + cos_rar * i.y;
+    			}
+    		}
+    	}
+    	//todo: i guess change vector(0, -1, 0) to the correct vector for all pitch_angle_radians too (up and down)
+    	// fabricate a back side
+    	vector left_vector = bounding[0] - bounding[1], // vector pointing left from top right to top left
+    		   projection = left_vector * (dot_product(bounding[0], left_vector) / dot_product(left_vector, left_vector)); // point on back side
+    
+        plane = {
+            {bounding[0], bounding[2], point(0, 0, 0)}, //left
+    		{bounding[3], bounding[1], point(0, 0, 0)}, //right
+    		{bounding[1], bounding[0], point(0, 0, 0)}, //top
+            {bounding[2], bounding[3], point(0, 0, 0)}, //bottom
+    		{point(0, 0, 0), projection, point(0, -1, 0) /*fix*/}, //back test	
+    		//todo: add back plane and maybe front
+        };
+        //todo: in is_in_frustum() for every object, find the distance from either the center or all points to each plane, and check if any part of the shape is inside
+    	#if __cplusplus >= 202002L
+            std::erase_if(can_hit, [&plane](object* i){return !i->is_in_frustum(plane);});
+        #else
+            can_hit.erase(std::remove_if(can_hit.begin(), can_hit.end(), [&plane](object* i){return !i->is_in_frustum(plane);}), can_hit.end());
+        #endif
+	};
+    create_plane(can_hit, plane, ypr);
+    plane_setup = [&](std::vector<object*>& c, plane_array& p, bool& yp){c = can_hit, p = plane, ypr = yp;};
+    lambda_destructor<plane_setup_type>(plane_setup, create_plane);
 	if(!can_hit.size()){
 		for(int i = 0; i < width_px * height_px; ++i) framebuf[i] = RGB(255, 255, 255);
 		return;
@@ -552,7 +607,49 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
 					break;
 			}
         	break;
-        case WM_TIMER:
+		case WM_LBUTTONDOWN:{
+			int x = GET_X_LPARAM(l), y = GET_Y_LPARAM(l);
+            std::vector<object*> can_hit;
+            plane_array plane;
+            bool ypr;
+            plane_setup(can_hit, plane, ypr);
+            //find increment values and stuff
+			vector v;
+			if(ypr){
+				vector start = plane[0][0]; //start at top left
+				vector row_inc = (plane[2][0] - plane[2][1]) / width_px, column_dec = (plane[0][0] - plane[0][1]) / height_px;
+				start -= column_dec * (height_px - y);
+				start.x += row_inc.x * x;
+				start.y += row_inc.y * x;
+				start.z += row_inc.z * x;
+				v = vector(start.x, -start.y, start.z);
+			}
+			else
+				v = vector(-width / 2 + x * pixel_inc, height / 2 - y * pixel_inc, z);
+			object* smallest = can_hit[0];
+			std::pair<bool, double> hit_b = smallest->hit(v);
+			bool hit_nothing = !hit_b.first, small_change = false;
+			//todo: likely and unlikely might be unnecessary
+			for(int w = 1; w < (int)can_hit.size(); ++w){
+				//if(comp(hit_nothing, v, world[i], smallest)) smallest = world[i];
+				std::pair<bool, double> hit_a = can_hit[w]->hit(v);				
+				if(small_change) hit_b = smallest->hit(v), small_change = false;
+
+				if(unlikely(hit_a.first)){
+					hit_nothing = false;
+					if(unlikely(hit_b.first)){
+						if(hit_a.second < hit_b.second)
+							smallest = can_hit[w], small_change = true;
+					}
+					else smallest = can_hit[w], small_change = true;
+				}
+				else hit_nothing = !hit_b.first;
+			}
+			if(likely(hit_nothing)) std::cout << "you clicked the vast emptiness of space, devoid of any shred of liveliness and hope...\n";
+			else std::cout << "you clicked something!\n";
+			break;
+		}
+		case WM_TIMER:
             InvalidateRgn(hwnd, 0, 0);
             UpdateWindow(hwnd);
             break;
