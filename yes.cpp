@@ -1,3 +1,4 @@
+#include <windowsx.h>
 #include <windows.h>
 #include <process.h>
 #include <functional>
@@ -393,11 +394,11 @@ std::vector<object*> world = {&s, &p
 #endif
 double z = width / (2 * tan(horizontal_fov / 2));
 typedef std::function<void(std::vector<object*>&, plane_array&, bool&)> plane_setup_type;
-struct lambda_destructor{
+template<typename T> struct lambda_destructor{
 public:
-    plane_setup_type &lambda, after;
-    lambda_editor(plane_setup_type& l, plane_setup_type a) : lambda(l) : after(a){}
-    ~lambda_editor(){lambda = a;}
+    T &lambda, after;
+    lambda_destructor(T& l, T a) : lambda(l), after(a){}
+    ~lambda_destructor(){lambda = after;}
 };
 plane_setup_type plane_setup;
 std::function<void()> render =
@@ -405,10 +406,10 @@ std::function<void()> render =
 	++f;
     //todo: use the gpu for calculations
 	std::vector<object*> can_hit; // copy
-    point_array plane;
+    plane_array plane;
     bool ypr;
-    //for clicks
-    plane_setup_type create_plane = [&world, &yaw_angle_radians, &pitch_angle_radians, &roll_angle_radians](std::vector<object*>& can_hit, plane_array& plane, bool& ypr){
+    //for clicks and stuff
+    plane_setup_type create_plane = [](std::vector<object*>& can_hit, plane_array& plane, bool& ypr){
         can_hit = world;
         point bounding[4]{
             point(-width / 2.0, height / 2.0, z), //upper left
@@ -460,10 +461,10 @@ std::function<void()> render =
         #else
             can_hit.erase(std::remove_if(can_hit.begin(), can_hit.end(), [&plane](object* i){return !i->is_in_frustum(plane);}), can_hit.end());
         #endif
-    };
+	};
     create_plane(can_hit, plane, ypr);
     plane_setup = [&](std::vector<object*>& c, plane_array& p, bool& yp){c = can_hit, p = plane, ypr = yp;};
-    lambda_destructor(plane_setup, create_plane);
+    lambda_destructor<plane_setup_type>(plane_setup, create_plane);
 	if(!can_hit.size()){
 		for(int i = 0; i < width_px * height_px; ++i) framebuf[i] = RGB(255, 255, 255);
 		return;
@@ -606,15 +607,25 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
 					break;
 			}
         	break;
-        #if 0
-		case WM_LBUTTONDOWN:
+		case WM_LBUTTONDOWN:{
+			int x = GET_X_LPARAM(l), y = GET_Y_LPARAM(l);
             std::vector<object*> can_hit;
-            point_array plane;
+            plane_array plane;
             bool ypr;
             plane_setup(can_hit, plane, ypr);
             //find increment values and stuff
-			int x = GET_X_LPARAM(l), y = GET_Y_LPARAM(l);
-			vector v(); //todo: get correct values
+			vector v;
+			if(ypr){
+				vector start = plane[0][0]; //start at top left
+				vector row_inc = (plane[2][0] - plane[2][1]) / width_px, column_dec = (plane[0][0] - plane[0][1]) / height_px;
+				start -= column_dec * (height_px - y);
+				start.x += row_inc.x * x;
+				start.y += row_inc.y * x;
+				start.z += row_inc.z * x;
+				v = vector(start.x, -start.y, start.z);
+			}
+			else
+				v = vector(-width / 2 + x * pixel_inc, height / 2 - y * pixel_inc, z);
 			object* smallest = can_hit[0];
 			std::pair<bool, double> hit_b = smallest->hit(v);
 			bool hit_nothing = !hit_b.first, small_change = false;
@@ -634,10 +645,10 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
 				}
 				else hit_nothing = !hit_b.first;
 			}
-			if(likely(hit_nothing)) std::cout << "you clicked nothing.\n";
+			if(likely(hit_nothing)) std::cout << "you clicked the vast emptiness of space, devoid of any shred of liveliness and hope...\n";
 			else std::cout << "you clicked something!\n";
 			break;
-        #endif
+		}
 		case WM_TIMER:
             InvalidateRgn(hwnd, 0, 0);
             UpdateWindow(hwnd);
