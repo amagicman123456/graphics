@@ -42,10 +42,10 @@ struct point{
     double x, y, z;
     point() : x(0), y(0), z(0){}
     point(double e, double f, double g) : x(e), y(f), z(g){}
-	inline point operator-(){
+	inline point operator-() const{
 		return point(-x, -y, -z);
 	}
-    inline point operator-(point f){
+    inline point operator-(point f) const{
         return point(x - f.x, y - f.y, z - f.z);
     }
     inline point& operator-=(point g){
@@ -54,10 +54,10 @@ struct point{
         z -= g.z;
         return *this;
     }
-    inline point operator*(double h){
+    inline point operator*(double h) const{
         return point(x * h, y * h, z * h);
     }
-	inline point operator/(double i){
+	inline point operator/(double i) const{
 		return point(x / i, y / i, z / i);
 	}
 };
@@ -73,12 +73,15 @@ typedef std::vector<point> plane;
 typedef std::vector<plane> plane_array;
 struct object{
 	//todo: make a bunch of stuff const instead
-    virtual std::pair<bool, double> hit(vector u) = 0;
-    virtual bool is_in_frustum(plane_array& plane) = 0;
-    virtual void set_color(color c){clr = c;}
+    virtual std::pair<bool, double> hit(vector u) const = 0;
+    virtual bool is_in_frustum(const plane_array& plane) const = 0;
+    virtual void set_color(const color c){clr = c;}
     color clr;
+	virtual void set_name(const char* str){name = str;}
+	const char* name;
 };
-double plane_distance(plane bound, point p){ 
+typedef object* object_pointer; //maybe change it to unique_ptr or shared_ptr idk
+double plane_distance(const plane& bound, const point& p){ 
 	vector a = bound[1] - bound[0], b = bound[2] - bound[0], cross = cross_product(a, b);
 	double cross_mag = sqrt(cross.x * cross.x + cross.y * cross.y + cross.z * cross.z);
 	cross.x /= cross_mag, cross.y /= cross_mag, cross.z /= cross_mag;
@@ -87,9 +90,10 @@ double plane_distance(plane bound, point p){
 struct sphere : public object{
     double radius;
     point center;
-    sphere(color cl, double r, point c) : radius(r), center(c){set_color(cl);}
-    virtual void set_color(color c){clr = c;}
-    std::pair<bool, double> hit(vector u) override{
+    sphere(color cl, double r, point c, const char* n = "sphere") : radius(r), center(c){set_color(cl), set_name(n);}
+    virtual void set_color(const color c){clr = c;}
+	virtual void set_name(const char* str){name = str;}
+    std::pair<bool, double> hit(vector u) const override{
         //todo: do the same thing for u.x and u.y
         //in is_in_frustum now
 		if((u.z > 0 && center.z < radius) || (u.z < 0 && center.z > radius)) return std::pair<bool, double>(false, 0);
@@ -113,7 +117,7 @@ struct sphere : public object{
 		if(determinant < 0) return std::pair<bool, double>(false, 0);
 		return std::pair<bool, double>(true, -dot - sqrt(determinant));
 	}
-    bool is_in_frustum(plane_array& plane) override{
+    bool is_in_frustum(const plane_array& plane) const override{
 		#if 0
 		//todo: i guess change vector(0, -1, 0) to the correct vector for all pitch_angle_radians too (up and down)
 		// fabricate a back side
@@ -199,21 +203,31 @@ struct sphere : public object{
 };
 struct polygon : public object{
     std::vector<point> points{};
-    polygon(color cl, auto... l) try /*: clr(cl)*/{
+    polygon(color cl, const char* n, auto... l) try /*: clr(cl)*/{
         set_color(cl);
+		set_name(n);
         if(sizeof...(l) < 3) throw;
         points = {(point(l))...};
         a = points[1] - points[0], b = points[2] - points[0], c = cross_product(a, b);
         k = c.x * points[0].x + c.y * points[1].y + c.z * points[2].z;
     }catch(...){std::cout << "error: number of points to polygon's constructor must be greater than two\n";}
-    virtual void set_color(color c){clr = c;}
-    void stretch(double& greatest, point& p){
+	polygon(color cl, auto... l) try /*: clr(cl)*/{
+        set_color(cl);
+		set_name("polygon");
+        if(sizeof...(l) < 3) throw;
+        points = {(point(l))...};
+        a = points[1] - points[0], b = points[2] - points[0], c = cross_product(a, b);
+        k = c.x * points[0].x + c.y * points[1].y + c.z * points[2].z;
+    }catch(...){std::cout << "error: number of points to polygon's constructor must be greater than two\n";}
+	virtual void set_color(const color c){clr = c;}
+    virtual void set_name(const char* str){name = str;}
+	void stretch(const double& greatest, point& p) const{
         double factor = greatest / p.z;
         p.x *= factor;
         p.y *= factor;
         p.z = greatest;
     };
-    std::pair<bool, double> hit(vector u) override{
+    std::pair<bool, double> hit(vector u) const override{
         //todo: do the same thing for u.x and u.y
         
 		for(const point& i : points)
@@ -229,6 +243,7 @@ struct polygon : public object{
         double distance = sqrt(intersection.x * intersection.x + intersection.y * intersection.y + intersection.z * intersection.z);
         double greatest = greater(greater(points[0].z, points[1].z), points[2].z);
 
+		return [&greatest, &distance, &intersection, this](std::vector<point>& points){
         for(point& i : points) stretch(greatest, i);
         stretch(greatest, intersection);
 
@@ -254,9 +269,9 @@ struct polygon : public object{
                 auto sign = [](point p1, point p2, point p3) -> double{
                     return (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y);
                 };
-                double d1 = sign(p, points[0], points[1]),
-                       d2 = sign(p, points[1], points[2]),
-                       d3 = sign(p, points[2], points[0]);
+                double d1 = sign(intersection, points[0], points[1]),
+                       d2 = sign(intersection, points[1], points[2]),
+                       d3 = sign(intersection, points[2], points[0]);
                 bool neg = d1 < 0 || d2 < 0 || d3 < 0,
                      pos = d1 > 0 || d2 > 0 || d3 > 0,
                      ret = !(neg && pos);
@@ -270,9 +285,10 @@ struct polygon : public object{
                 (intersection.x < (points[j].x - points[i].x) * (intersection.y - points[i].y) / (points[j].y - points[i].y) + points[i].x))
                     inside = !inside;
         return std::pair<bool, double>(inside, distance);
-    }
-    bool is_in_frustum(plane_array& plane) override{
-		for(point& i : points){
+    	}(const_cast<std::vector<point>&>(points));
+	}
+    bool is_in_frustum(const plane_array& plane) const override{
+		for(const point& i : points){
 			/*
 			vector left_vector = plane[2][0] - plane[2][1], // vector pointing left from top right to top left
 				   projection = left_vector * (dot_product(plane[2][1], left_vector) / dot_product(left_vector, left_vector)), // point on back side
@@ -313,9 +329,12 @@ struct doughnut : public object{
     double minor_radius, major_radius;
     double yaw_rad, pitch_rad;
     doughnut(color cl, double minor_r, double major_r, point c, double yaw = 0, double pitch = 0) :
-        center(c), minor_radius(minor_r), major_radius(major_r), yaw_rad(yaw), pitch_rad(pitch), epsilon(major_r * major_r - minor_r * minor_r){set_color(cl);}
-    virtual void set_color(color c){clr = c;}
-    std::pair<bool, double> hit(vector u) override{
+        center(c), minor_radius(minor_r), major_radius(major_r), yaw_rad(yaw), pitch_rad(pitch), epsilon(major_r * major_r - minor_r * minor_r){set_color(cl), set_name("doughnut");}
+    doughnut(color cl, double minor_r, double major_r, point c, const char* n, double yaw = 0, double pitch = 0) :
+        center(c), minor_radius(minor_r), major_radius(major_r), yaw_rad(yaw), pitch_rad(pitch), epsilon(major_r * major_r - minor_r * minor_r){set_color(cl), set_name(n);}
+	virtual void set_color(const color c){clr = c;}
+    virtual void set_name(const char* str){name = str;}
+	std::pair<bool, double> hit(vector u) const override{
         //u -= center; // todo: with a center other than the origin the donut does weird things
 		//already accounted for in formula but it still does weird things
 		if(yaw_rad){
@@ -366,34 +385,39 @@ struct doughnut : public object{
         //return std::pair<bool, double>(!(p > 0 || g > 0), 100);
         return std::pair<bool, double>(p < 0 && g < 0, 100);
     }
-    bool is_in_frustum(plane_array& plane) override{
+    bool is_in_frustum(const plane_array& plane) const override{
         return true; //for now
     }
 private:
     double epsilon;
 };
-
 sphere s(RGB(0, 0, 255), sqrt(100000), point(100, 41.5, 2000));
 //doughnut d(RGB(0, 255, 0), 200, 300, point(100, 100, 5000));
 doughnut d(RGB(255, 0, 255), 90, 1500, point(0, 0, 0), 1.57, 1);
-point a(-250, -300, 2400), b(250, 200, 1500), c(350, -100, 1000)
+point p1(-250, -300, 2400), p2(250, 200, 1500), p3(350, -100, 1000)
 #ifdef QUAD
-    , d(-250, -100, 2000)
+    , p4(-250, -100, 2000)
 #endif
 ;
-polygon p(RGB(0, 255, 0), a, b, c
+polygon p(RGB(0, 255, 0),
 #ifdef QUAD
-    , d
+"quadrilateral"
+#else
+"triangle"
+#endif
+, p1, p2, p3
+#ifdef QUAD
+    , p4
 #endif
 );
-std::vector<object*> world = {&s, &p
+std::vector<object_pointer> world = {&s, &p
 #ifdef NO_DOUGHNUT
 	};
 #else
 , &d};
 #endif
 double z = width / (2 * tan(horizontal_fov / 2));
-typedef std::function<void(std::vector<object*>&, plane_array&, bool&)> plane_setup_type;
+typedef std::function<void(std::vector<object_pointer>&, plane_array&, bool&)> plane_setup_type;
 template<typename T> struct lambda_destructor{
 public:
     T &lambda, after;
@@ -405,11 +429,11 @@ std::function<void()> render =
 [](){
 	++f;
     //todo: use the gpu for calculations
-	std::vector<object*> can_hit; // copy
+	std::vector<object_pointer> can_hit; // copy
     plane_array plane;
     bool ypr;
     //for clicks and stuff
-    plane_setup_type create_plane = [](std::vector<object*>& can_hit, plane_array& plane, bool& ypr){
+    plane_setup_type create_plane = [](std::vector<object_pointer>& can_hit, plane_array& plane, bool& ypr){
         can_hit = world;
         point bounding[4]{
             point(-width / 2.0, height / 2.0, z), //upper left
@@ -457,13 +481,13 @@ std::function<void()> render =
         };
         //todo: in is_in_frustum() for every object, find the distance from either the center or all points to each plane, and check if any part of the shape is inside
     	#if __cplusplus >= 202002L
-            std::erase_if(can_hit, [&plane](object* i){return !i->is_in_frustum(plane);});
+            std::erase_if(can_hit, [&plane](object_pointer i){return !i->is_in_frustum(plane);});
         #else
-            can_hit.erase(std::remove_if(can_hit.begin(), can_hit.end(), [&plane](object* i){return !i->is_in_frustum(plane);}), can_hit.end());
+            can_hit.erase(std::remove_if(can_hit.begin(), can_hit.end(), [&plane](object_pointer i){return !i->is_in_frustum(plane);}), can_hit.end());
         #endif
 	};
     create_plane(can_hit, plane, ypr);
-    plane_setup = [&](std::vector<object*>& c, plane_array& p, bool& yp){c = can_hit, p = plane, ypr = yp;};
+    plane_setup = [&](std::vector<object_pointer>& c, plane_array& p, bool& yp){c = can_hit, p = plane, ypr = yp;};
     lambda_destructor<plane_setup_type>(plane_setup, create_plane);
 	if(!can_hit.size()){
 		for(int i = 0; i < width_px * height_px; ++i) framebuf[i] = RGB(255, 255, 255);
@@ -480,7 +504,7 @@ std::function<void()> render =
 				//double vy = height / 2.0 - j;
 				int index = prev + ipx;
 				vector v(row_vx, -row_vy, row_vz);
-				object* smallest = can_hit[0];
+				object_pointer smallest = can_hit[0];
 				std::pair<bool, double> hit_b = smallest->hit(v);
 				bool hit_nothing = !hit_b.first, small_change = false;
 				//todo: likely and unlikely might be unnecessary
@@ -511,7 +535,7 @@ std::function<void()> render =
 				int index = jpx * width_px + ipx;
 				vector v(-width / 2 + i, height / 2 - j, z);
 
-				object* smallest = can_hit[0];
+				object_pointer smallest = can_hit[0];
 				std::pair<bool, double> hit_b = smallest->hit(v);
 				bool hit_nothing = !hit_b.first, small_change = false;
 				//todo: likely and unlikely might be unnecessary
@@ -609,7 +633,7 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
         	break;
 		case WM_LBUTTONDOWN:{
 			int x = GET_X_LPARAM(l), y = GET_Y_LPARAM(l);
-            std::vector<object*> can_hit;
+            std::vector<object_pointer> can_hit;
             plane_array plane;
             bool ypr;
             plane_setup(can_hit, plane, ypr);
@@ -626,7 +650,7 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
 			}
 			else
 				v = vector(-width / 2 + x * pixel_inc, height / 2 - y * pixel_inc, z);
-			object* smallest = can_hit[0];
+			object_pointer smallest = can_hit[0];
 			std::pair<bool, double> hit_b = smallest->hit(v);
 			bool hit_nothing = !hit_b.first, small_change = false;
 			//todo: likely and unlikely might be unnecessary
@@ -646,7 +670,7 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
 				else hit_nothing = !hit_b.first;
 			}
 			if(likely(hit_nothing)) std::cout << "you clicked the vast emptiness of space, devoid of any shred of liveliness and hope...\n";
-			else std::cout << "you clicked something!\n";
+			else std::cout << "you clicked on a " << smallest->name << "!\n";
 			break;
 		}
 		case WM_TIMER:
