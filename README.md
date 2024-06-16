@@ -29,3 +29,5 @@ options:
 * -Dfirst_algorithm: use the first of the triangle algorithms
 
 * -DQUAD: render a quadrilateral instead of a triangle, i've neglected this so idk
+
+* -DSOUND -lwinmm: play sounds when clicking shapes :D

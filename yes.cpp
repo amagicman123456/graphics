@@ -657,7 +657,14 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
 				else hit_nothing = !hit_b.first;
 			}
 			if(likely(hit_nothing)) std::cout << "you clicked the vast emptiness of space, devoid of any shred of liveliness and hope...\n";
-			else std::cout << "you clicked on a " << smallest->name << "!\n";
+			else{
+				#ifdef SOUND
+				static char sound_name[256];
+				strncpy(sound_name, (std::string("sound/") + std::string(smallest->name) + std::string(".wav")).c_str(), 100);
+				PlaySound(TEXT(sound_name), NULL, SND_FILENAME | SND_ASYNC);
+				#endif
+				std::cout << "you clicked on a " << smallest->name << "!\n";
+			}
 			break;
 		}
 		case WM_TIMER:
