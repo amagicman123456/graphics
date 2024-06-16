@@ -2,26 +2,42 @@
 
 ## the project (made by ryu co)
 
-this is a raytracer ig
-
-in yes.cpp
-
-it renders 3d spheres and shapes
-
-im trying to make a torus rn
+this is a raytracer, currently able to render spheres, polygons, and tori
 
 ![image](/images/line-torus.PNG)
 
 but idk what im doing
 
-btw yes_cursed.exe is way too cursed
+btw outdated/yes_cursed.exe is way too cursed
 
 ![image](/images/cursed.PNG)
 
 build with
 
 ```
-x86_64-w64-mingw32-g++ yes.cpp -static -lgdi32 -fconcepts-ts -Ofast -o yes
+x86_64-w64-mingw32-g++ yes.cpp [options] -static -lgdi32 -fconcepts-ts -Ofast -o yes
 ```
+
+options:
+
+```
+-DNO_DOUGHNUT
+```
+no doughnut in sight :(
+
+```
+-Dtri_specialization
+```
+use an algorithm specifically for triangles, idk if the performance changes
+
+```
+-Dfirst_algorithm
+```
+use the first of the triangle algorithms
+
+```
+-DQUAD
+```
+render a quadrilateral instead of a triangle, i've neglected this so idk
 
 </div>
