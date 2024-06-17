@@ -196,22 +196,22 @@ struct sphere : public object{
 	}
 };
 struct polygon : public object{
-    std::vector<point> points{};
-    polygon(color cl, const char* n, auto... l) try /*: clr(cl)*/{
+    const std::vector<point> points/*{}*/;
+    polygon(color cl, const char* n, auto... l) try /*: clr(cl)*/ : points{(point(l))...}{
         set_color(cl);
 		set_class_name();
 		set_name(n);
         if(sizeof...(l) < 3) throw;
-        points = {(point(l))...};
+        //points = {(point(l))...};
         a = points[1] - points[0], b = points[2] - points[0], c = cross_product(a, b);
         k = c.x * points[0].x + c.y * points[1].y + c.z * points[2].z;
     }catch(...){std::cout << "error: number of points to polygon's constructor must be greater than two\n";}
-	polygon(color cl, auto... l) try /*: clr(cl)*/{
+	polygon(color cl, auto... l) try /*: clr(cl)*/ : points{(point(l))...}{
         set_color(cl);
 		set_class_name();
 		set_name("the default polygon");
         if(sizeof...(l) < 3) throw;
-        points = {(point(l))...};
+        //points = {(point(l))...};
         a = points[1] - points[0], b = points[2] - points[0], c = cross_product(a, b);
         k = c.x * points[0].x + c.y * points[1].y + c.z * points[2].z;
     }catch(...){std::cout << "error: number of points to polygon's constructor must be greater than two\n";}
@@ -240,35 +240,40 @@ struct polygon : public object{
         double distance = sqrt(intersection.x * intersection.x + intersection.y * intersection.y + intersection.z * intersection.z);
         double greatest = greater(greater(points[0].z, points[1].z), points[2].z);
 
-		return [&greatest, &distance, &intersection, this](std::vector<point>& points){
-        for(point& i : points) stretch(greatest, i);
-        stretch(greatest, intersection);
-
+		//return [&greatest, &distance, &intersection, this](std::vector<point>& points){
+		static std::vector<point> vertices = points;
+		static int i = 0;
+		if(!i){
+			double greatest = greater(greater(points[0].z, points[1].z), points[2].z);
+			for(point& i : vertices) stretch(greatest, i);
+        	stretch(greatest, intersection);
+			++i;
+		}
         //#define tri_specialization
         //#define first_algorithm
 
         #ifdef tri_specialization
-        if(points.size() == 3){
+        if(vertices.size() == 3){
             #ifdef first_algorithm
-                if(points[2].y == points[0].y){
-                    point temp = points[2];
-                    points[2] = points[1];
-                    points[1] = temp;
+                if(vertices[2].y == vertices[0].y){
+                    point temp = vertices[2];
+                    vertices[2] = vertices[1];
+                    vertices[1] = temp;
                 }
-                double s1 = points[2].y - points[0].y,
-                       s2 = points[2].x - points[0].x,
-                       s3 = points[1].y - points[0].y,
-                       s4 = intersection.y - points[0].y;
-                double w1 = (points[0].x * s1 + s4 * s2 - intersection.x * s1) / (s3 * s2 - (points[1].x - points[0].x) * s1),
+                double s1 = vertices[2].y - vertices[0].y,
+                       s2 = vertices[2].x - vertices[0].x,
+                       s3 = vertices[1].y - vertices[0].y,
+                       s4 = intersection.y - vertices[0].y;
+                double w1 = (vertices[0].x * s1 + s4 * s2 - intersection.x * s1) / (s3 * s2 - (vertices[1].x - vertices[0].x) * s1),
                        w2 = (s4 - w1 * s3) / s1;
                 return std::pair<bool, double>(w1 >= 0 && w2 >= 0 && (w1 + w2) <= 1, distance);
             #else
                 auto sign = [](point p1, point p2, point p3) -> double{
                     return (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y);
                 };
-                double d1 = sign(intersection, points[0], points[1]),
-                       d2 = sign(intersection, points[1], points[2]),
-                       d3 = sign(intersection, points[2], points[0]);
+                double d1 = sign(intersection, vertices[0], vertices[1]),
+                       d2 = sign(intersection, vertices[1], vertices[2]),
+                       d3 = sign(intersection, vertices[2], vertices[0]);
                 bool neg = d1 < 0 || d2 < 0 || d3 < 0,
                      pos = d1 > 0 || d2 > 0 || d3 > 0,
                      ret = !(neg && pos);
@@ -277,12 +282,12 @@ struct polygon : public object{
         }
         #endif
         bool inside = false;
-        for(int i = 0, j = points.size() - 1; i < (int)points.size(); j = i++)
-            if(((points[i].y > intersection.y) != (points[j].y > intersection.y)) &&
-                (intersection.x < (points[j].x - points[i].x) * (intersection.y - points[i].y) / (points[j].y - points[i].y) + points[i].x))
+        for(int i = 0, j = vertices.size() - 1; i < (int)vertices.size(); j = i++)
+            if(((vertices[i].y > intersection.y) != (vertices[j].y > intersection.y)) &&
+                (intersection.x < (vertices[j].x - vertices[i].x) * (intersection.y - vertices[i].y) / (vertices[j].y - vertices[i].y) + vertices[i].x))
                     inside = !inside;
         return std::pair<bool, double>(inside, distance);
-    	}(const_cast<std::vector<point>&>(points));
+    	//}(const_cast<std::vector<point>&>(points));
 	}
     bool is_in_frustum(const plane_array& plane) const override{
 		for(const point& i : points){
