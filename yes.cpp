@@ -609,7 +609,7 @@ std::function<void()> render =
 LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
     static HDC pdc;
     static HBITMAP old;
-    static HBITMAP ourbitmap;
+    static HBITMAP bitmap;
     switch(msg){
         case WM_CREATE:{
             SetTimer(hwnd, 1, 1, 0);
@@ -624,9 +624,9 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
             bitmapinfo.bmiHeader.biCompression = BI_RGB;
             bitmapinfo.bmiHeader.biClrUsed = 256;
             bitmapinfo.bmiHeader.biClrImportant = 256;
-            ourbitmap = CreateDIBSection(hdc, &bitmapinfo, DIB_RGB_COLORS, (void**)&framebuf, 0, 0);
+            bitmap = CreateDIBSection(hdc, &bitmapinfo, DIB_RGB_COLORS, (void**)&framebuf, 0, 0);
             pdc = CreateCompatibleDC(0);
-            old = (HBITMAP)SelectObject(pdc, ourbitmap);
+            old = (HBITMAP)SelectObject(pdc, bitmap);
             DeleteDC(hdc);
             break;
         }
@@ -636,7 +636,7 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
             resize();
             SelectObject(pdc, old);
             DeleteDC(pdc);
-            DeleteObject(ourbitmap);
+            DeleteObject(bitmap);
             HDC hdc;
             BITMAPINFO bitmapinfo{};
             hdc = CreateCompatibleDC(0);
@@ -648,9 +648,9 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
             bitmapinfo.bmiHeader.biCompression = BI_RGB;
             bitmapinfo.bmiHeader.biClrUsed = 256;
             bitmapinfo.bmiHeader.biClrImportant = 256;
-            ourbitmap = CreateDIBSection(hdc, &bitmapinfo, DIB_RGB_COLORS, (void**)&framebuf, 0, 0);
+            bitmap = CreateDIBSection(hdc, &bitmapinfo, DIB_RGB_COLORS, (void**)&framebuf, 0, 0);
             pdc = CreateCompatibleDC(0);
-            old = (HBITMAP)SelectObject(pdc, ourbitmap);
+            old = (HBITMAP)SelectObject(pdc, bitmap);
             DeleteDC(hdc);
             break;
         }
@@ -734,7 +734,7 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
         case WM_DESTROY:
             SelectObject(pdc, old);
             DeleteDC(pdc);
-            DeleteObject(ourbitmap);
+            DeleteObject(bitmap);
             KillTimer(hwnd, 1);
             exit(0);
         default:
