@@ -241,14 +241,33 @@ struct polygon : public object{
         double greatest = greater(greater(points[0].z, points[1].z), points[2].z);
 
 		//return [&greatest, &distance, &intersection, this](std::vector<point>& points){
-		static std::vector<point> vertices = points;
+		static double yar_snap = yaw_angle_radians, par_snap = pitch_angle_radians, rar_snap = roll_angle_radians;
+        static std::vector<point> vertices;
 		static int i = 0;
 		if(!i){
+            vertices = points;
 			double greatest = greater(greater(points[0].z, points[1].z), points[2].z);
 			for(point& i : vertices) stretch(greatest, i);
         	stretch(greatest, intersection);
 			++i;
-		}
+		}else{
+            if(yar_snap != yaw_angle_radians){
+                yar_snap = yaw_angle_radians; 
+                goto update;
+            }
+            if(par_snap != pitch_angle_radians){
+                par_snap = pitch_angle_radians;
+                goto update;
+            }
+            if(rar_snap != roll_angle_radians){
+                rar_snap = roll_angle_radias;
+                update:
+                vertices = points;
+                double greatest = greater(greater(points[0].z, points[1].z), points[2].z);
+    			for(point& i : vertices) stretch(greatest, i);
+            	stretch(greatest, intersection);
+            }
+        }
         //#define tri_specialization
         //#define first_algorithm
 
