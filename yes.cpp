@@ -196,22 +196,22 @@ struct sphere : public object{
 	}
 };
 struct polygon : public object{
-    std::vector<point> points{};
-    polygon(color cl, const char* n, auto... l) try /*: clr(cl)*/{
+    const std::vector<point> points/*{}*/;
+    polygon(color cl, const char* n, auto... l) try /*: clr(cl)*/ : points{(point(l))...}{
         set_color(cl);
 		set_class_name();
 		set_name(n);
         if(sizeof...(l) < 3) throw;
-        points = {(point(l))...};
+        //points = {(point(l))...};
         a = points[1] - points[0], b = points[2] - points[0], c = cross_product(a, b);
         k = c.x * points[0].x + c.y * points[1].y + c.z * points[2].z;
     }catch(...){std::cout << "error: number of points to polygon's constructor must be greater than two\n";}
-	polygon(color cl, auto... l) try /*: clr(cl)*/{
+	polygon(color cl, auto... l) try /*: clr(cl)*/ : points{(point(l))...}{
         set_color(cl);
 		set_class_name();
 		set_name("the default polygon");
         if(sizeof...(l) < 3) throw;
-        points = {(point(l))...};
+        //points = {(point(l))...};
         a = points[1] - points[0], b = points[2] - points[0], c = cross_product(a, b);
         k = c.x * points[0].x + c.y * points[1].y + c.z * points[2].z;
     }catch(...){std::cout << "error: number of points to polygon's constructor must be greater than two\n";}
@@ -219,6 +219,7 @@ struct polygon : public object{
     virtual void set_name(const char* str){name = str;}
 	virtual void set_class_name(){class_name = "polygon";}
 	void stretch(const double& greatest, point& p) const{
+		//fix to accomodate for yar par and rar
         double factor = greatest / p.z;
         p.x *= factor;
         p.y *= factor;
@@ -227,7 +228,7 @@ struct polygon : public object{
     std::pair<bool, double> hit(vector u) const override{
         //todo: do the same thing for u.x and u.y
         
-		for(const point& i : points)
+		for(const point& i : points) //maybe change to vertices
             if((u.z < 0 && i.z < 0) || (u.z > 0 && i.z > 0)) goto polygon_start;
        	return std::pair<bool, double>(false, 0);
         polygon_start:
@@ -240,35 +241,75 @@ struct polygon : public object{
         double distance = sqrt(intersection.x * intersection.x + intersection.y * intersection.y + intersection.z * intersection.z);
         double greatest = greater(greater(points[0].z, points[1].z), points[2].z);
 
-		return [&greatest, &distance, &intersection, this](std::vector<point>& points){
-        for(point& i : points) stretch(greatest, i);
-        stretch(greatest, intersection);
-
+		//return [&greatest, &distance, &intersection, this](std::vector<point>& points){
+		static double yar_snap = yaw_angle_radians, par_snap = pitch_angle_radians, rar_snap = roll_angle_radians;
+        static std::vector<point> vertices;
+		static int call_num = 0, calls_per_frame = width_px * height_px;;
+		#if __cplusplus >= 201703L
+		[[maybe_unused]]
+		#endif
+		static bool once = [&](){
+            vertices = points;
+			double greatest = greater(greater(points[0].z, points[1].z), points[2].z);
+			for(point& i : vertices) stretch(greatest, i);
+			return true;
+		}();
+		#if __cplusplus < 201703L
+		(void)once; //for no warning
+		#endif
+        if(likely(call_num < calls_per_frame)){
+        	stretch(greatest, intersection);
+			//todo: increment at the end of the frame
+			++call_num;
+		}else{
+            call_num = 0;
+            if(calls_per_frame != width_px * height_px)
+                calls_per_frame = width_px * height_px;
+            if(yar_snap != yaw_angle_radians){
+                yar_snap = yaw_angle_radians; 
+                goto update;
+            }
+            if(par_snap != pitch_angle_radians){
+                par_snap = pitch_angle_radians;
+                goto update;
+            }
+            if(rar_snap != roll_angle_radians){
+                rar_snap = roll_angle_radians;
+                update:
+                vertices = points;
+                double greatest = greater(greater(points[0].z, points[1].z), points[2].z);
+    			for(point& i : vertices) stretch(greatest, i);
+            	stretch(greatest, intersection);
+            }
+        }
         //#define tri_specialization
         //#define first_algorithm
 
         #ifdef tri_specialization
-        if(points.size() == 3){
+        if(vertices.size() == 3){
             #ifdef first_algorithm
-                if(points[2].y == points[0].y){
-                    point temp = points[2];
-                    points[2] = points[1];
-                    points[1] = temp;
+				int one = 1, two = 2;
+                if(vertices[2].y == vertices[0].y){
+                    //point temp = vertices[2];
+                    //vertices[2] = vertices[1];
+                    //vertices[1] = temp;
+					one = 2;
+					two = 1;
                 }
-                double s1 = points[2].y - points[0].y,
-                       s2 = points[2].x - points[0].x,
-                       s3 = points[1].y - points[0].y,
-                       s4 = intersection.y - points[0].y;
-                double w1 = (points[0].x * s1 + s4 * s2 - intersection.x * s1) / (s3 * s2 - (points[1].x - points[0].x) * s1),
+                double s1 = vertices[two].y - vertices[0].y,
+                       s2 = vertices[two].x - vertices[0].x,
+                       s3 = vertices[one].y - vertices[0].y,
+                       s4 = intersection.y - vertices[0].y;
+                double w1 = (vertices[0].x * s1 + s4 * s2 - intersection.x * s1) / (s3 * s2 - (vertices[one].x - vertices[0].x) * s1),
                        w2 = (s4 - w1 * s3) / s1;
                 return std::pair<bool, double>(w1 >= 0 && w2 >= 0 && (w1 + w2) <= 1, distance);
             #else
                 auto sign = [](point p1, point p2, point p3) -> double{
                     return (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y);
                 };
-                double d1 = sign(intersection, points[0], points[1]),
-                       d2 = sign(intersection, points[1], points[2]),
-                       d3 = sign(intersection, points[2], points[0]);
+                double d1 = sign(intersection, vertices[0], vertices[1]),
+                       d2 = sign(intersection, vertices[1], vertices[2]),
+                       d3 = sign(intersection, vertices[2], vertices[0]);
                 bool neg = d1 < 0 || d2 < 0 || d3 < 0,
                      pos = d1 > 0 || d2 > 0 || d3 > 0,
                      ret = !(neg && pos);
@@ -277,12 +318,12 @@ struct polygon : public object{
         }
         #endif
         bool inside = false;
-        for(int i = 0, j = points.size() - 1; i < (int)points.size(); j = i++)
-            if(((points[i].y > intersection.y) != (points[j].y > intersection.y)) &&
-                (intersection.x < (points[j].x - points[i].x) * (intersection.y - points[i].y) / (points[j].y - points[i].y) + points[i].x))
+        for(int i = 0, j = vertices.size() - 1; i < (int)vertices.size(); j = i++)
+            if(((vertices[i].y > intersection.y) != (vertices[j].y > intersection.y)) &&
+                (intersection.x < (vertices[j].x - vertices[i].x) * (intersection.y - vertices[i].y) / (vertices[j].y - vertices[i].y) + vertices[i].x))
                     inside = !inside;
         return std::pair<bool, double>(inside, distance);
-    	}(const_cast<std::vector<point>&>(points));
+    	//}(const_cast<std::vector<point>&>(points));
 	}
     bool is_in_frustum(const plane_array& plane) const override{
 		for(const point& i : points){
@@ -311,10 +352,10 @@ struct polygon : public object{
 			double left_distance = plane_distance(plane[0], i), right_distance = plane_distance(plane[1], i),
 				   top_distance = plane_distance(plane[2], i), bottom_distance = plane_distance(plane[3], i);
         	if(left_distance > 0 && right_distance > 0 && top_distance > 0 && bottom_distance > 0) return true;
-			//todo: moving left once and down once makes the polygon disappear :(
 		}
-		//std::cout << "EVICTION ALERT!!!\n";
-        return false;
+        //return false;
+		//todo: moving left twice and down once makes the polygon disappear :(
+        return this->hit(plane[0][0]).first || this->hit(plane[0][1]).first || this->hit(plane[1][0]).first || this->hit(plane[1][1]).first; 
     }
 private:
     vector a, b, c;
@@ -384,6 +425,7 @@ struct doughnut : public object{
         return std::pair<bool, double>(p < 0 && g < 0, 100);
     }
     bool is_in_frustum(const plane_array& plane) const override{
+		(void)plane; //for no warning
         return true; //for now
     }
 private:
@@ -439,6 +481,9 @@ std::function<void()> render =
             point(-width / 2.0, -height / 2.0, z), //bottom left
             point(width / 2.0, -height / 2.0, z) //bottom right
         };
+		#if __cplusplus < 201703L
+		#define M_PI 3.14159265358979323846
+		#endif
         ypr = /*yaw_angle_radians*/ abs_val(fmod(yaw_angle_radians, M_PI)) > 0.01 ||
     			   /*pitch_angle_radians*/ abs_val(fmod(pitch_angle_radians, M_PI)) > 0.01 ||
     			   /*roll_angle_radians*/ abs_val(fmod(roll_angle_radians, M_PI)) > 0.01;
@@ -564,7 +609,7 @@ std::function<void()> render =
 LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
     static HDC pdc;
     static HBITMAP old;
-    static HBITMAP ourbitmap;
+    static HBITMAP bitmap;
     switch(msg){
         case WM_CREATE:{
             SetTimer(hwnd, 1, 1, 0);
@@ -579,9 +624,9 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
             bitmapinfo.bmiHeader.biCompression = BI_RGB;
             bitmapinfo.bmiHeader.biClrUsed = 256;
             bitmapinfo.bmiHeader.biClrImportant = 256;
-            ourbitmap = CreateDIBSection(hdc, &bitmapinfo, DIB_RGB_COLORS, (void**)&framebuf, 0, 0);
+            bitmap = CreateDIBSection(hdc, &bitmapinfo, DIB_RGB_COLORS, (void**)&framebuf, 0, 0);
             pdc = CreateCompatibleDC(0);
-            old = (HBITMAP)SelectObject(pdc, ourbitmap);
+            old = (HBITMAP)SelectObject(pdc, bitmap);
             DeleteDC(hdc);
             break;
         }
@@ -591,7 +636,7 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
             resize();
             SelectObject(pdc, old);
             DeleteDC(pdc);
-            DeleteObject(ourbitmap);
+            DeleteObject(bitmap);
             HDC hdc;
             BITMAPINFO bitmapinfo{};
             hdc = CreateCompatibleDC(0);
@@ -603,9 +648,9 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
             bitmapinfo.bmiHeader.biCompression = BI_RGB;
             bitmapinfo.bmiHeader.biClrUsed = 256;
             bitmapinfo.bmiHeader.biClrImportant = 256;
-            ourbitmap = CreateDIBSection(hdc, &bitmapinfo, DIB_RGB_COLORS, (void**)&framebuf, 0, 0);
+            bitmap = CreateDIBSection(hdc, &bitmapinfo, DIB_RGB_COLORS, (void**)&framebuf, 0, 0);
             pdc = CreateCompatibleDC(0);
-            old = (HBITMAP)SelectObject(pdc, ourbitmap);
+            old = (HBITMAP)SelectObject(pdc, bitmap);
             DeleteDC(hdc);
             break;
         }
@@ -689,7 +734,7 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
         case WM_DESTROY:
             SelectObject(pdc, old);
             DeleteDC(pdc);
-            DeleteObject(ourbitmap);
+            DeleteObject(bitmap);
             KillTimer(hwnd, 1);
             exit(0);
         default:
