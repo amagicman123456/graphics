@@ -219,6 +219,7 @@ struct polygon : public object{
     virtual void set_name(const char* str){name = str;}
 	virtual void set_class_name(){class_name = "polygon";}
 	void stretch(const double& greatest, point& p) const{
+		//fix to accomodate for yar par and rar
         double factor = greatest / p.z;
         p.x *= factor;
         p.y *= factor;
@@ -227,7 +228,7 @@ struct polygon : public object{
     std::pair<bool, double> hit(vector u) const override{
         //todo: do the same thing for u.x and u.y
         
-		for(const point& i : points)
+		for(const point& i : points) //maybe change to vertices
             if((u.z < 0 && i.z < 0) || (u.z > 0 && i.z > 0)) goto polygon_start;
        	return std::pair<bool, double>(false, 0);
         polygon_start:
@@ -249,6 +250,7 @@ struct polygon : public object{
 			double greatest = greater(greater(points[0].z, points[1].z), points[2].z);
 			for(point& i : vertices) stretch(greatest, i);
         	stretch(greatest, intersection);
+			//todo: increment at the end of the frame
 			++i;
 		}else{
             if(yar_snap != yaw_angle_radians){
@@ -260,7 +262,7 @@ struct polygon : public object{
                 goto update;
             }
             if(rar_snap != roll_angle_radians){
-                rar_snap = roll_angle_radias;
+                rar_snap = roll_angle_radians;
                 update:
                 vertices = points;
                 double greatest = greater(greater(points[0].z, points[1].z), points[2].z);
@@ -274,16 +276,19 @@ struct polygon : public object{
         #ifdef tri_specialization
         if(vertices.size() == 3){
             #ifdef first_algorithm
+				int one = 1, two = 2;
                 if(vertices[2].y == vertices[0].y){
-                    point temp = vertices[2];
-                    vertices[2] = vertices[1];
-                    vertices[1] = temp;
+                    //point temp = vertices[2];
+                    //vertices[2] = vertices[1];
+                    //vertices[1] = temp;
+					one = 2;
+					two = 1;
                 }
-                double s1 = vertices[2].y - vertices[0].y,
-                       s2 = vertices[2].x - vertices[0].x,
-                       s3 = vertices[1].y - vertices[0].y,
+                double s1 = vertices[two].y - vertices[0].y,
+                       s2 = vertices[two].x - vertices[0].x,
+                       s3 = vertices[one].y - vertices[0].y,
                        s4 = intersection.y - vertices[0].y;
-                double w1 = (vertices[0].x * s1 + s4 * s2 - intersection.x * s1) / (s3 * s2 - (vertices[1].x - vertices[0].x) * s1),
+                double w1 = (vertices[0].x * s1 + s4 * s2 - intersection.x * s1) / (s3 * s2 - (vertices[one].x - vertices[0].x) * s1),
                        w2 = (s4 - w1 * s3) / s1;
                 return std::pair<bool, double>(w1 >= 0 && w2 >= 0 && (w1 + w2) <= 1, distance);
             #else
@@ -337,9 +342,8 @@ struct polygon : public object{
         	if(left_distance > 0 && right_distance > 0 && top_distance > 0 && bottom_distance > 0) return true;
 			//todo: moving left once and down once makes the polygon disappear :(
 		}
-		//std::cout << "EVICTION ALERT!!!\n";
         //return false;
-        return this->hit(plane[0][0]) || this->hit(plane[0][1]) || this->hit(plane[1][0]) || this->hit(plane[1][1]); 
+        return this->hit(plane[0][0]).first || this->hit(plane[0][1]).first || this->hit(plane[1][0]).first || this->hit(plane[1][1]).first; 
     }
 private:
     vector a, b, c;
