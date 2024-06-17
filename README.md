@@ -2,7 +2,7 @@
 
 ## the project (made by ryu co)
 
-this is a raytracer, currently able to render spheres, polygons, and tori
+this is a raytracer in c++ for versions >= c++14, currently able to render spheres, polygons, and tori
 
 ![image](/images/line-torus.PNG)
 

@@ -245,13 +245,18 @@ struct polygon : public object{
 		static double yar_snap = yaw_angle_radians, par_snap = pitch_angle_radians, rar_snap = roll_angle_radians;
         static std::vector<point> vertices;
 		static int call_num = 0, calls_per_frame = width_px * height_px;;
-        static int i = 0;
-        if(unlikely(!i)){
-            ++i;
+		#if __cplusplus >= 201703L
+		[[maybe_unused]]
+		#endif
+		static bool once = [&](){
             vertices = points;
 			double greatest = greater(greater(points[0].z, points[1].z), points[2].z);
 			for(point& i : vertices) stretch(greatest, i);
-        }
+			return true;
+		}();
+		#if __cplusplus < 201703L
+		(void)once; //for no warning
+		#endif
         if(likely(call_num < calls_per_frame)){
         	stretch(greatest, intersection);
 			//todo: increment at the end of the frame
@@ -347,9 +352,9 @@ struct polygon : public object{
 			double left_distance = plane_distance(plane[0], i), right_distance = plane_distance(plane[1], i),
 				   top_distance = plane_distance(plane[2], i), bottom_distance = plane_distance(plane[3], i);
         	if(left_distance > 0 && right_distance > 0 && top_distance > 0 && bottom_distance > 0) return true;
-			//todo: moving left once and down once makes the polygon disappear :(
 		}
         //return false;
+		//todo: moving left twice and down once makes the polygon disappear :(
         return this->hit(plane[0][0]).first || this->hit(plane[0][1]).first || this->hit(plane[1][0]).first || this->hit(plane[1][1]).first; 
     }
 private:
@@ -420,6 +425,7 @@ struct doughnut : public object{
         return std::pair<bool, double>(p < 0 && g < 0, 100);
     }
     bool is_in_frustum(const plane_array& plane) const override{
+		(void)plane; //for no warning
         return true; //for now
     }
 private:
@@ -475,6 +481,9 @@ std::function<void()> render =
             point(-width / 2.0, -height / 2.0, z), //bottom left
             point(width / 2.0, -height / 2.0, z) //bottom right
         };
+		#if __cplusplus < 201703L
+		#define M_PI 3.14159265358979323846
+		#endif
         ypr = /*yaw_angle_radians*/ abs_val(fmod(yaw_angle_radians, M_PI)) > 0.01 ||
     			   /*pitch_angle_radians*/ abs_val(fmod(pitch_angle_radians, M_PI)) > 0.01 ||
     			   /*roll_angle_radians*/ abs_val(fmod(roll_angle_radians, M_PI)) > 0.01;
