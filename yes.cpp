@@ -195,6 +195,7 @@ struct sphere : public object{
 		#endif
 	}
 };
+int calls_per_frame = width_px * height_px; //maybe change in resize() or just change in polygon
 struct polygon : public object{
     const std::vector<point> points/*{}*/;
     polygon(color cl, const char* n, auto... l) try /*: clr(cl)*/ : points{(point(l))...}{
@@ -244,15 +245,20 @@ struct polygon : public object{
 		//return [&greatest, &distance, &intersection, this](std::vector<point>& points){
 		static double yar_snap = yaw_angle_radians, par_snap = pitch_angle_radians, rar_snap = roll_angle_radians;
         static std::vector<point> vertices;
-		static int i = 0;
-		if(!i){
+		static int call_num = 0;
+        static int i = 0;
+        if(!i){
+            ++i;
             vertices = points;
 			double greatest = greater(greater(points[0].z, points[1].z), points[2].z);
 			for(point& i : vertices) stretch(greatest, i);
+        }
+		if(call_num < calls_per_frame){
         	stretch(greatest, intersection);
 			//todo: increment at the end of the frame
-			++i;
+			++call_num;
 		}else{
+            call_num = 0;
             if(yar_snap != yaw_angle_radians){
                 yar_snap = yaw_angle_radians; 
                 goto update;
