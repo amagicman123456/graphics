@@ -338,7 +338,8 @@ struct polygon : public object{
 			//todo: moving left once and down once makes the polygon disappear :(
 		}
 		//std::cout << "EVICTION ALERT!!!\n";
-        return false;
+        //return false;
+        return this->hit(plane[0][0]) || this->hit(plane[0][1]) || this->hit(plane[1][0]) || this->hit(plane[1][1]); 
     }
 private:
     vector a, b, c;
