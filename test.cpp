@@ -40,6 +40,14 @@ double plane_distance(plane bound, point p){
 	return dot_product(cross, p);
 }
 int main(){
-	plane p{point(0, 0, 0), point(0, 0, -50), point(0, -50, 0)};
-	std::cout << plane_distance(p, point(50, 0, 0)) << '\n';
+	//plane p{point(0, 0, 0), point(0, 0, -50), point(0, -50, 0)};
+	constexpr int width = 1200, height = 600, z = 1336; // magic arbitrary value
+    plane p{
+        point(-width / 2, -height / 2, z),
+        point(width / 2, -height / 2, z),
+        point(0, 0, 0)
+    };
+    //std::cout << plane_distance(p, point(50, 0, 0)) << '\n';
+    std::cout << plane_distance(p, point(-240, -320, 2400)) << '\n';
+    return 0;
 }

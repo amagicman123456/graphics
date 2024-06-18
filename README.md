@@ -31,3 +31,7 @@ options:
 * -DQUAD: render a quadrilateral instead of a triangle, i've neglected this so idk
 
 * -DSOUND -lwinmm: play sounds when clicking shapes :D
+
+* -Dhorizontal_fov=[value]: set the horizontal fov to [value] degrees/radians (depending on if -Din_radians is set)
+
+* -Din_radians: specify that the horizontal fov set is in radians
