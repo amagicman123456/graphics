@@ -637,7 +637,7 @@ std::function<void()> render =
 #ifdef SOUND
 std::vector<std::unique_ptr<char[]>> sounds;
 void play_sounds(void*){
-	for(int i = 0; i < sounds.size(); ++i)
+	for(int i = 0; i < (int)sounds.size(); ++i)
 		PlaySound(TEXT(sounds[i].get()), NULL, SND_FILENAME | SND_SYNC);
 	sounds.clear();
 	return;
@@ -747,13 +747,13 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
 			if(likely(hit_nothing)) std::cout << "you clicked the vast emptiness of space, devoid of any shred of liveliness and hope...\n";
 			else{
 				#ifdef SOUND
-				static char sound_name[256];
+				//static char sound_name[256];
 				//strncpy(sound_name, (std::string("sound/") + std::string(smallest->class_name) + std::string(".wav")).c_str(), 256);
 				std::string path = std::string("sound/") + std::string(smallest->class_name);
 				for(const auto& file : fs::directory_iterator(path)){
-					strncpy(sound_name, file.path().string().c_str(), 256);
+					//strncpy(sound_name, file.path().string().c_str(), 255);
 					sounds.emplace_back(std::unique_ptr<char[]>(new char[256]));
-					strncpy(sounds.back().get(), sound_name, 256);
+					strncpy(sounds.back().get(), file.path().string().c_str(), 255);
 					//PlaySound(TEXT(sound_name), NULL, SND_FILENAME | SND_ASYNC);
 				}
 				_beginthread(play_sounds, 0, 0);
