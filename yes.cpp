@@ -749,6 +749,7 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
 				#ifdef SOUND
 				//static char sound_name[256];
 				//strncpy(sound_name, (std::string("sound/") + std::string(smallest->class_name) + std::string(".wav")).c_str(), 256);
+				bool playing = sounds.size();
 				std::string path = std::string("sound/") + std::string(smallest->class_name);
 				for(const auto& file : fs::directory_iterator(path)){
 					//strncpy(sound_name, file.path().string().c_str(), 255);
@@ -756,7 +757,7 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
 					strncpy(sounds.back().get(), file.path().string().c_str(), 255);
 					//PlaySound(TEXT(sound_name), NULL, SND_FILENAME | SND_ASYNC);
 				}
-				_beginthread(play_sounds, 0, 0);
+				if(!playing) _beginthread(play_sounds, 0, 0);
 				#endif
 				std::cout << "you clicked on a " << smallest->class_name << " and its name is \'" << smallest->name << "\'!\n";
 			}
