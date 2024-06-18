@@ -7,6 +7,16 @@
 #include <atomic>
 #include <vector>
 #include <cmath>
+#ifdef SOUND
+	#include <memory>
+	#if __cplusplus >= 201703L
+		#include <filesystem>
+		namespace fs = std::filesystem;
+	#elif __cplusplus >= 201402L
+		#include <experimental/filesystem>
+		namespace fs = std::experimental::filesystem;
+	#endif
+#endif
 #define likely(x) __builtin_expect(!!(x), 1)
 #define unlikely(x) __builtin_expect(!!(x), 0)
 std::atomic<int> f(0);
@@ -467,12 +477,14 @@ std::vector<object_pointer> world = {&s, &p
 #endif
 constexpr double convert_horizontal_fov_to_radians = //maybe just make it a bool and ternary the 0.0175 in calculating for z
 #ifdef in_radians
-1 / 0.0175 //to cancel out the 0.0175
-#else
+//1 / 0.0175 //to cancel out the 0.0175
 1
+#else
+//1
+0.0175
 #endif
 ;
-double z = width / (2 * tan(horizontal_fov * convert_horizontal_fov_to_radians * 0.0175 / 2));
+double z = width / (2 * tan(horizontal_fov * convert_horizontal_fov_to_radians /* * 0.0175*/ / 2));
 typedef std::function<void(std::vector<object_pointer>&, plane_array&, bool&)> plane_setup_type;
 template<typename T> struct lambda_destructor{
 public:
@@ -617,11 +629,20 @@ std::function<void()> render =
 }
 , resize =
 [](){
-    z = width / (2 * tan(horizontal_fov * convert_horizontal_fov_to_radians * 0.0175 / 2));
+    z = width / (2 * tan(horizontal_fov * convert_horizontal_fov_to_radians /* * 0.0175*/ / 2));
     vertical_fov = atan(tan(height_px / 2.0) * height_px / (double)width_px);
     height = height_px / (double)width_px;
     pixel_inc = width / width_px;
 };
+#ifdef SOUND
+std::vector<std::unique_ptr<char[]>> sounds;
+void play_sounds(void*){
+	for(int i = 0; i < (int)sounds.size(); ++i)
+		PlaySound(TEXT(sounds[i].get()), NULL, SND_FILENAME | SND_SYNC);
+	sounds.clear();
+	return;
+}
+#endif
 LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
     static HDC pdc;
     static HBITMAP old;
@@ -712,7 +733,7 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
 				//if(comp(hit_nothing, v, world[i], smallest)) smallest = world[i];
 				std::pair<bool, double> hit_a = can_hit[w]->hit(v);				
 				if(small_change) hit_b = smallest->hit(v), small_change = false;
-
+				
 				if(unlikely(hit_a.first)){
 					hit_nothing = false;
 					if(unlikely(hit_b.first)){
@@ -726,9 +747,16 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
 			if(likely(hit_nothing)) std::cout << "you clicked the vast emptiness of space, devoid of any shred of liveliness and hope...\n";
 			else{
 				#ifdef SOUND
-				static char sound_name[256];
-				strncpy(sound_name, (std::string("sound/") + std::string(smallest->class_name) + std::string(".wav")).c_str(), 100);
-				PlaySound(TEXT(sound_name), NULL, SND_FILENAME | SND_ASYNC);
+				//static char sound_name[256];
+				//strncpy(sound_name, (std::string("sound/") + std::string(smallest->class_name) + std::string(".wav")).c_str(), 256);
+				std::string path = std::string("sound/") + std::string(smallest->class_name);
+				for(const auto& file : fs::directory_iterator(path)){
+					//strncpy(sound_name, file.path().string().c_str(), 255);
+					sounds.emplace_back(std::unique_ptr<char[]>(new char[256]));
+					strncpy(sounds.back().get(), file.path().string().c_str(), 255);
+					//PlaySound(TEXT(sound_name), NULL, SND_FILENAME | SND_ASYNC);
+				}
+				_beginthread(play_sounds, 0, 0);
 				#endif
 				std::cout << "you clicked on a " << smallest->class_name << " and its name is \'" << smallest->name << "\'!\n";
 			}
