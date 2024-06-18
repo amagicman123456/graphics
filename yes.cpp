@@ -23,7 +23,10 @@ void fps(void*){
 int width_px = 1200, height_px = 600, tick_count, *framebuf;
 double width = 1, height = height_px / (double)width_px,
        pixel_inc = width / width_px;
-double horizontal_fov = 120, vertical_fov = atan(tan(height_px / 2.0) * height_px / (double)width_px);
+#ifndef horizontal_fov
+	#define horizontal_fov 90
+#endif
+double /*horizontal_fov = 90,*/ vertical_fov = atan(tan(height_px / 2.0) * height_px / (double)width_px);
 inline double square(double x){
     return x * x;
 }
@@ -351,12 +354,18 @@ struct polygon : public object{
 			//assuming again
 			double left_distance = plane_distance(plane[0], i), right_distance = plane_distance(plane[1], i),
 				   top_distance = plane_distance(plane[2], i), bottom_distance = plane_distance(plane[3], i);
-        	if(left_distance > 0 && right_distance > 0 && top_distance > 0 && bottom_distance > 0) return true;
+        	//std::cout << "point " << i.x << ' ' << i.y << ' ' << i.z << 
+			//			 " distances: " << left_distance << ' ' << right_distance << ' ' << top_distance << ' ' << bottom_distance << '\n';
+			if(left_distance > 0 && right_distance > 0 && top_distance > 0 && bottom_distance > 0) return true;
 		}
         //return false;
 		//todo: moving left twice and down once makes the polygon disappear :(
-        return this->hit(plane[0][0]).first || this->hit(plane[0][1]).first || this->hit(plane[1][0]).first || this->hit(plane[1][1]).first; 
-    }
+		//todo: when going down the distance to bottom becomes negative for some reason
+        //return this->hit(plane[0][0]).first || this->hit(plane[0][1]).first || this->hit(plane[1][0]).first || this->hit(plane[1][1]).first; 
+    	bool corner_in_polygon = this->hit(plane[0][0]).first || this->hit(plane[0][1]).first || this->hit(plane[1][0]).first || this->hit(plane[1][1]).first; 
+		//if(!corner_in_polygon) std::cout << "nooooooooooooo\n";
+		return corner_in_polygon;
+	}
 private:
     vector a, b, c;
     double k;
@@ -456,7 +465,14 @@ std::vector<object_pointer> world = {&s, &p
 #else
 , &d};
 #endif
-double z = width / (2 * tan(horizontal_fov / 2));
+constexpr double convert_horizontal_fov_to_radians = //maybe just make it a bool and ternary the 0.0175 in calculating for z
+#ifdef in_radians
+1 / 0.0175 //to cancel out the 0.0175
+#else
+1
+#endif
+;
+double z = width / (2 * tan(horizontal_fov * convert_horizontal_fov_to_radians * 0.0175 / 2));
 typedef std::function<void(std::vector<object_pointer>&, plane_array&, bool&)> plane_setup_type;
 template<typename T> struct lambda_destructor{
 public:
@@ -601,7 +617,7 @@ std::function<void()> render =
 }
 , resize =
 [](){
-    z = width / (2 * tan(horizontal_fov / 2));
+    z = width / (2 * tan(horizontal_fov * convert_horizontal_fov_to_radians * 0.0175 / 2));
     vertical_fov = atan(tan(height_px / 2.0) * height_px / (double)width_px);
     height = height_px / (double)width_px;
     pixel_inc = width / width_px;
