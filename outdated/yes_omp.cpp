@@ -30,7 +30,9 @@ void fps(void*){
         f = 0;
     }
 }
-int width_px = 1200, height_px = 600, tick_count, *framebuf;
+int width_px = 1200, height_px = 600, tick_count;
+std::atomic<int*> framebuf;
+//int *framebuf;
 double width = 1, height = height_px / (double)width_px,
        pixel_inc = width / width_px;
 #ifndef horizontal_fov
@@ -68,32 +70,6 @@ struct point{
 	inline point operator/(double i) const{
 		return point(x / i, y / i, z / i);
 	}
-	/* if needed
-	#if __cplusplus >= 202002L
-	auto operator<=>(const point& other) const{
-		if(x == other.x){
-			if(y == other.y){
-				if(z == other.z)
-					return 0;
-				if(z < other.z) return -1;
-				return 1;
-			}
-			if(y < other.y) return -1;
-			return 1;
-		}
-		if(x < other.x) return -1;
-		return 1;
-	}
-	#else
-	bool operator==(const point& other) const{
-		return x == other.x && y == other.y && z == other.z;
-	}
-	bool operator!=(const point& other) const{
-		return !this->operator==(other);
-	}
-	//implement >, <, >=, <= if needed
-	#endif
-	*/
 };
 typedef uint32_t color;
 typedef point vector;
@@ -302,10 +278,7 @@ struct polygon : public object{
 			++call_num;
 		}else{
             call_num = 0;
-			if(vertices.size() != points.size()) goto update;
-			for(int i = 0; i < (int)vertices.size(); ++i)
-				if(vertices[i].x != points[i].x || vertices[i].y != points[i].y) goto update;
-			if(calls_per_frame != width_px * height_px)
+            if(calls_per_frame != width_px * height_px)
                 calls_per_frame = width_px * height_px;
             if(yar_snap != yaw_angle_radians){
                 yar_snap = yaw_angle_radians; 
@@ -592,66 +565,85 @@ std::function<void()> render =
 		return;
 	}
 	if(ypr){
-		vector start = plane[0][0]; //start at top left
-		vector row_inc = (plane[2][0] - plane[2][1]) / width_px, column_dec = (plane[0][0] - plane[0][1]) / height_px;
-		for(int jpx = height_px - 1; jpx >= 0; start -= column_dec, --jpx){
-			double row_vx = start.x, row_vy = start.y, row_vz = start.z;
-			int prev = jpx * width_px;
-			for(int ipx = 0; ipx < width_px; row_vx += row_inc.x, row_vy += row_inc.y, row_vz += row_inc.z, ++ipx){
-				int index = prev + ipx;
-				vector v(row_vx, -row_vy, row_vz);
-				object_pointer smallest = can_hit[0];
-				std::pair<bool, double> hit_b = smallest->hit(v);
-				bool hit_nothing = !hit_b.first, small_change = false;
-				//todo: likely and unlikely might be unnecessary
-				for(int w = 1; w < (int)can_hit.size(); ++w){
-					//if(comp(hit_nothing, v, world[i], smallest)) smallest = world[i];
-					std::pair<bool, double> hit_a = can_hit[w]->hit(v);				
-					if(small_change) hit_b = smallest->hit(v), small_change = false;
+		//compile with -fopenmp
+		#pragma omp parallel //num_threads(2)
+		{
+			vector start = plane[0][0]; //start at top left
+			vector row_inc = (plane[2][0] - plane[2][1]) / width_px, column_dec = (plane[0][0] - plane[0][1]) / height_px;
+			//#pragma omp parallel for schedule(static, width_px * height_px / 4) //reduction(+:framebuf[:width_px * height_px])
+			#pragma omp parallel for schedule(static, height_px / 4)
+			for(int jpx = height_px - 1; jpx >= 0; --jpx){
+				double row_vx = start.x, row_vy = start.y, row_vz = start.z;
+				int prev = jpx * width_px;
+				for(int ipx = 0; ipx < width_px; row_vx += row_inc.x, row_vy += row_inc.y, row_vz += row_inc.z, ++ipx){
+					int index = prev + ipx;
+					vector v(row_vx, -row_vy, row_vz);
+					object_pointer smallest = can_hit[0];
+					std::pair<bool, double> hit_b = smallest->hit(v);
+					bool hit_nothing = !hit_b.first, small_change = false;
+					//todo: likely and unlikely might be unnecessary
+					for(int w = 1; w < (int)can_hit.size(); ++w){
+						//if(comp(hit_nothing, v, world[i], smallest)) smallest = world[i];
+						std::pair<bool, double> hit_a = can_hit[w]->hit(v);				
+						if(small_change) hit_b = smallest->hit(v), small_change = false;
 
-					if(unlikely(hit_a.first)){
-						hit_nothing = false;
-						if(unlikely(hit_b.first)){
-							if(hit_a.second < hit_b.second)
-								smallest = can_hit[w], small_change = true;
+						if(unlikely(hit_a.first)){
+							hit_nothing = false;
+							if(unlikely(hit_b.first)){
+								if(hit_a.second < hit_b.second)
+									smallest = can_hit[w], small_change = true;
+							}
+							else smallest = can_hit[w], small_change = true;
 						}
-						else smallest = can_hit[w], small_change = true;
+						else hit_nothing = !hit_b.first;
 					}
-					else hit_nothing = !hit_b.first;
+					if(likely(hit_nothing)) framebuf[index] = RGB(255, 255, 255);//RGB(255, 0, 0);
+					else framebuf[index] = smallest->clr;
 				}
-				if(likely(hit_nothing)) framebuf[index] = RGB(255, 255, 255);//RGB(255, 0, 0);
-				else framebuf[index] = smallest->clr;
+				start -= column_dec;
 			}
 		}
 	}else{
-		int ipx, jpx = height_px - 1;
-		for(double j = height/*- 1*/; j >= 0 && jpx >= 0; /*--j*/j -= pixel_inc, --jpx){
-			ipx = 0;
-			for(double i = 0; i < width /* 1 */ && ipx < width_px; /*++i*/i += pixel_inc, ++ipx){
-				int index = jpx * width_px + ipx;
-				vector v(-width / 2 + i, height / 2 - j, z);
+		//int ipx;
+		//double j = height;
+		//compile with -fopenmp
+		#pragma omp parallel //num_threads(2)//for //reduction(+:framebuf[:width_px * height_px])
+		{
+			int ipx;
+			double j = height;
+			//#pragma omp parallel for schedule(static, width_px * height_px / 4)
+			#pragma omp parallel for schedule(static, height_px / 4)
+			for(int jpx = height_px - 1; jpx >= 0; --jpx){
+				double i = 0;
+				//#pragma omp parallel for schedule(static, width_px / 4)
+				for(ipx = 0; /*i < width &&*/ ipx < width_px; /*++i*//*i += pixel_inc,*/ ++ipx){
+					int index = jpx * width_px + ipx;
+					vector v(-width / 2 + i, height / 2 - j, z);
 
-				object_pointer smallest = can_hit[0];
-				std::pair<bool, double> hit_b = smallest->hit(v);
-				bool hit_nothing = !hit_b.first, small_change = false;
-				//todo: likely and unlikely might be unnecessary
-				for(int w = 1; w < (int)can_hit.size(); ++w){
-					//if(comp(hit_nothing, v, world[i], smallest)) smallest = world[i];
-					std::pair<bool, double> hit_a = can_hit[w]->hit(v);
-					if(small_change) hit_b = smallest->hit(v), small_change = false;
+					object_pointer smallest = can_hit[0];
+					std::pair<bool, double> hit_b = smallest->hit(v);
+					bool hit_nothing = !hit_b.first, small_change = false;
+					//todo: likely and unlikely might be unnecessary
+					for(int w = 1; w < (int)can_hit.size(); ++w){
+						//if(comp(hit_nothing, v, world[i], smallest)) smallest = world[i];
+						std::pair<bool, double> hit_a = can_hit[w]->hit(v);
+						if(small_change) hit_b = smallest->hit(v), small_change = false;
 
-					if(unlikely(hit_a.first)){
-						hit_nothing = false;
-						if(unlikely(hit_b.first)){
-							if(hit_a.second < hit_b.second)
-								smallest = can_hit[w], small_change = true;
+						if(unlikely(hit_a.first)){
+							hit_nothing = false;
+							if(unlikely(hit_b.first)){
+								if(hit_a.second < hit_b.second)
+									smallest = can_hit[w], small_change = true;
+							}
+							else smallest = can_hit[w], small_change = true;
 						}
-						else smallest = can_hit[w], small_change = true;
+						else hit_nothing = !hit_b.first;
 					}
-					else hit_nothing = !hit_b.first;
+					if(likely(hit_nothing)) framebuf[index] = RGB(255, 255, 255);//RGB(255, 0, 0);
+					else framebuf[index] = smallest->clr;
+					i += pixel_inc;
 				}
-				if(likely(hit_nothing)) framebuf[index] = RGB(255, 255, 255);//RGB(255, 0, 0);
-				else framebuf[index] = smallest->clr;
+				j -= pixel_inc;
 			}
 		}
 	}
@@ -782,8 +774,7 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
 				std::string path = std::string("sound/") + std::string(smallest->class_name);
 				for(const auto& file : fs::directory_iterator(path)){
 					//strncpy(sound_name, file.path().string().c_str(), 255);
-					//sounds.emplace_back(std::unique_ptr<char[]>(new char[256]));
-					sounds.emplace_back(std::make_unique<char[]>(256));
+					sounds.emplace_back(std::unique_ptr<char[]>(new char[256]));
 					strncpy(sounds.back().get(), file.path().string().c_str(), 255);
 					//PlaySound(TEXT(sound_name), NULL, SND_FILENAME | SND_ASYNC);
 				}
