@@ -7,6 +7,9 @@
 #include <atomic>
 #include <vector>
 #include <cmath>
+#if __cplusplus < 201703L
+	#define M_PI 3.14159265358979323846
+#endif
 #ifdef SOUND
 	#include <memory>
 	#if __cplusplus >= 201703L
@@ -16,6 +19,60 @@
 		#include <experimental/filesystem>
 		namespace fs = std::experimental::filesystem;
 	#endif
+#endif
+#ifdef IMAGE
+#include <fstream>
+struct image{
+	image() : width(0), row_bytes(0), height(0), data(nullptr){}
+	image(image&& other){
+		width = other.width;
+		row_bytes = other.row_bytes;
+		height = other.height;
+		data = std::move(other.data);
+	}
+	image(uint32_t a, int32_t b, std::unique_ptr<uint8_t[]>&& c) : width(a), row_bytes((3 * a + 3) & -4) /* round up to multiple of 4 */, height(b), data(std::move(c)){}
+	uint32_t width;
+	uint32_t row_bytes;
+	int32_t height;
+	std::unique_ptr<uint8_t[]> data;
+	uint32_t color_at(uint32_t x, uint32_t y) const{
+		uint32_t index = /*(height - y - 1)*/y * row_bytes + 3 * x;
+		//return (uint32_t)data[index] << 24 |
+		//	   (uint32_t)data[index + 1] << 16 |
+		//	   (uint32_t)data[index + 2] << 8;
+		return (uint32_t)data[index] << 16 |
+			   (uint32_t)data[index + 1] << 8 |
+			   (uint32_t)data[index + 2];
+	}
+	image& operator=(image&& other){
+		width = other.width;
+		row_bytes = other.row_bytes;
+		height = other.height;
+		data = std::move(other.data);
+		return *this;
+	}
+	//make iterators if wanted
+};
+image read_rgb_image(const char* path){
+	std::ifstream bitmap{path, std::ios::in | std::ios::binary};
+	if(!bitmap) return image(0, 0, std::unique_ptr<uint8_t[]>(nullptr));
+	char buf[26];
+	bitmap.read(buf, 26);
+	uint32_t width = *reinterpret_cast<uint32_t*>(buf + 18);
+	int32_t height = *reinterpret_cast<int32_t*>(buf + 22);
+	bool sign = height > 0;
+	uint32_t size = 3 * width * (sign ? height : -height);
+	std::unique_ptr<uint8_t[]> data = std::make_unique<uint8_t[]>(size);
+	bitmap.seekg(*reinterpret_cast<uint32_t*>(buf + 10), std::ios_base::beg);
+	bitmap.read(reinterpret_cast<char*>(data.get()), size);
+	if(sign)
+		for(uint32_t i = 0; i < size; i += 3){
+			uint8_t temp = data[i];
+			data[i] = data[i + 2];
+			data[i + 2] = temp;
+		}
+	return image(width, height, std::move(data));
+}
 #endif
 #define likely(x) __builtin_expect(!!(x), 1)
 #define unlikely(x) __builtin_expect(!!(x), 0)
@@ -30,7 +87,8 @@ void fps(void*){
         f = 0;
     }
 }
-int width_px = 1200, height_px = 600, tick_count, *framebuf;
+int width_px = 1200, height_px = 600, tick_count;
+uint32_t *framebuf;
 double width = 1, height = height_px / (double)width_px,
        pixel_inc = width / width_px;
 #ifndef horizontal_fov
@@ -105,11 +163,22 @@ inline double dot_product(vector a, vector b){
 }
 typedef std::vector<point> plane;
 typedef std::vector<plane> plane_array;
+#define no_color 4278190080
+struct hit_val{
+	bool first;
+	double second;
+	color third;
+	hit_val(bool b, double d, color c = no_color/*use unused byte*/) : first(b), second(d), third(c){}
+};
 struct object{
-    virtual std::pair<bool, double> hit(vector u) const = 0;
+    virtual /*std::pair<bool, double>*/ hit_val hit(vector u) const = 0;
     virtual bool is_in_frustum(const plane_array& plane) const = 0;
     virtual void set_color(const color c){clr = c;}
     color clr;
+	#ifdef IMAGE
+	virtual void set_image(image&& i){img = std::move(i);}
+	image img;
+	#endif
 	virtual void set_name(const char* str){name = str;}
 	const char *class_name, *name;
 };
@@ -123,13 +192,32 @@ double plane_distance(const plane& bound, const point& p){
 struct sphere : public object{
     double radius;
     point center;
-    sphere(color cl, double r, point c, const char* n = "the default sphere") : radius(r), center(c){set_color(cl), set_class_name(), set_name(n);}
+	#ifdef IMAGE
+	double image_yaw_rad, image_pitch_rad, image_roll_rad;
+	#endif
+    sphere(color cl, double r, point c, const char* n = "the default sphere"
+	#ifdef IMAGE
+	, image&& i = read_rgb_image(""), double yaw_rad = 0, double pitch_rad = 0, double roll_rad = 0
+	#endif 
+	) : radius(r), center(c)
+	#ifdef IMAGE
+	, image_yaw_rad(yaw_rad), image_pitch_rad(pitch_rad), image_roll_rad(roll_rad)
+	#endif
+	{set_color(cl), set_class_name(), set_name(n)
+	#ifdef IMAGE
+	, set_image(std::move(i))
+	#endif
+	;
+	}
     virtual void set_color(const color c){clr = c;}
 	virtual void set_name(const char* str){name = str;}
+	#ifdef IMAGE
+	virtual void set_image(image&& i){img = std::move(i);}
+	#endif
 	virtual void set_class_name(){class_name = "sphere";}
-    std::pair<bool, double> hit(vector u) const override{
+    /*std::pair<bool, double>*/ hit_val hit(vector u) const override{
         //todo: do the same thing for u.x and u.y
-		if((u.z > 0 && center.z < radius) || (u.z < 0 && center.z > radius)) return std::pair<bool, double>(false, 0);
+		if((u.z > 0 && center.z < radius) || (u.z < 0 && center.z > radius)) return /*std::pair<bool, double>*/ hit_val(false, 0);
 		/*	
         double magnitude_squared = u.x * u.x + u.y * u.y + u.z * u.z;
         //double dot = dot_product(u.x, u.y, u.z, center.x, center.y, center.z);
@@ -147,8 +235,40 @@ struct sphere : public object{
 		u.x /= magnitude, u.y /= magnitude, u.z /= magnitude;
 		double dot = dot_product(u, -center);
 		double determinant = dot * dot - (center.x * center.x + center.y * center.y + center.z * center.z - radius * radius);
-		if(determinant < 0) return std::pair<bool, double>(false, 0);
-		return std::pair<bool, double>(true, -dot - sqrt(determinant));
+		if(determinant < 0) return /*std::pair<bool, double>*/ hit_val(false, 0);
+		double distance = -dot - sqrt(determinant);
+		#ifndef IMAGE
+		return /*std::pair<bool, double>*/ hit_val(true, distance);
+		#else
+		if(!img.width || !img.height) return hit_val(true, distance);
+		vector hit_spot = (u * distance) - center;
+		if(image_yaw_rad){
+			double cos_yar = cos(image_yaw_rad), sin_yar = sin(image_yaw_rad), sin_yar_x = sin_yar * hit_spot.x;
+			hit_spot.x = cos_yar * hit_spot.x + sin_yar * hit_spot.z;
+			hit_spot.z = -sin_yar_x + cos_yar * hit_spot.z;
+		}
+		if(image_pitch_rad){
+			//todo: check if pitch is actually correct (make it so positive always migrates to top instead of going in circles)
+			double cos_par = cos(image_pitch_rad), sin_par = sin(image_pitch_rad), sin_par_y = sin_par * hit_spot.y;
+			hit_spot.y = cos_par * hit_spot.y - sin_par * hit_spot.z;
+			hit_spot.z = sin_par_y + cos_par * hit_spot.z;
+		}
+		if(image_roll_rad){
+			//todo: check if roll is actually correct
+			double cos_rar = cos(image_roll_rad), sin_rar = sin(image_roll_rad), sin_rar_x = sin_rar * hit_spot.x;
+			hit_spot.x = cos_rar * hit_spot.x - sin_rar * hit_spot.y;
+			hit_spot.y = sin_rar_x + cos_rar * hit_spot.y;
+		}
+		double hit_spot_magnitude = sqrt(hit_spot.x * hit_spot.x + hit_spot.y * hit_spot.y + hit_spot.z * hit_spot.z);
+		hit_spot.x /= hit_spot_magnitude, hit_spot.y /= hit_spot_magnitude, hit_spot.z /= hit_spot_magnitude;
+		{
+			double u = 0.5 + atan2(hit_spot.z, hit_spot.x) / (2 * M_PI);
+			double v = 0.5 + asin(hit_spot.y) / M_PI;
+			int x = lrint(u * img.width), y = lrint(v * img.height);
+			color hit_color = img.color_at(x, y);
+			return hit_val(true, distance, hit_color);
+		}
+		#endif
 	}
     bool is_in_frustum(const plane_array& plane) const override{
 		#if 0
@@ -242,8 +362,8 @@ struct polygon : public object{
 		set_name(n);
         if(sizeof...(l) < 3) throw;
         //points = {(point(l))...};
-        a = points[1] - points[0], b = points[2] - points[0], c = cross_product(a, b);
-        k = c.x * points[0].x + c.y * points[1].y + c.z * points[2].z;
+        //a = points[1] - points[0], b = points[2] - points[0], c = cross_product(a, b);
+        //k = c.x * points[0].x + c.y * points[1].y + c.z * points[2].z;
     }catch(...){std::cout << "error: number of points to polygon's constructor must be greater than two\n";}
 	polygon(color cl, auto... l) try /*: clr(cl)*/ : points{(point(l))...}{
         set_color(cl);
@@ -251,8 +371,8 @@ struct polygon : public object{
 		set_name("the default polygon");
         if(sizeof...(l) < 3) throw;
         //points = {(point(l))...};
-        a = points[1] - points[0], b = points[2] - points[0], c = cross_product(a, b);
-        k = c.x * points[0].x + c.y * points[1].y + c.z * points[2].z;
+        //a = points[1] - points[0], b = points[2] - points[0], c = cross_product(a, b);
+        //k = c.x * points[0].x + c.y * points[1].y + c.z * points[2].z;
     }catch(...){std::cout << "error: number of points to polygon's constructor must be greater than two\n";}
 	virtual void set_color(const color c){clr = c;}
     virtual void set_name(const char* str){name = str;}
@@ -264,23 +384,46 @@ struct polygon : public object{
         p.y *= factor;
         p.z = greatest;
     };
-    std::pair<bool, double> hit(vector u) const override{
+    /*std::pair<bool, double>*/ hit_val hit(vector u) const override{
         //todo: do the same thing for u.x and u.y
         
 		for(const point& i : points) //maybe change to vertices
             if((u.z < 0 && i.z < 0) || (u.z > 0 && i.z > 0)) goto polygon_start;
-       	return std::pair<bool, double>(false, 0);
+       	return /*std::pair<bool, double>*/ hit_val(false, 0);
         polygon_start:
+		
+		static double yar_snap = yaw_angle_radians, par_snap = pitch_angle_radians, rar_snap = roll_angle_radians;
+        static std::vector<point> vertices;
+		static int call_num = 0, calls_per_frame = width_px * height_px;
+		static vector a, b, c;
+		static double k;
+		#if __cplusplus >= 201703L
+		[[maybe_unused]]
+		#endif
+		static bool once = [&](){
+            vertices = points;
+			a = points[1] - points[0], b = points[2] - points[0], c = cross_product(a, b);
+        	//k = c.x * points[0].x + c.y * points[1].y + c.z * points[2].z;
+			k = c.x * points[0].x + c.y * points[0].y + c.z * points[0].z;
+			double greatest = greater(greater(points[0].z, points[1].z), points[2].z);
+			for(point& i : vertices) stretch(greatest, i);
+			return true;
+		}();
+		#if __cplusplus < 201703L
+		(void)once; //for no warning
+		#endif
 
         double e = u.x * c.x + u.y * c.y + u.z * c.z;
         double t = k / e;
-        if(likely(!e || (u.z * t < 0))) return std::pair<bool, double>(false, 0);
+        if(likely(!e || (u.z * t < 0))) return /*std::pair<bool, double>*/ hit_val(false, 0);
         point intersection(u.x * t, u.y * t, u.z * t);
-
+		//std::cout << "t: " << t << '\n';
+		//std::cout << "intersection: " << intersection.x << ' ' << intersection.y << ' ' << intersection.z << '\n';
         double distance = sqrt(intersection.x * intersection.x + intersection.y * intersection.y + intersection.z * intersection.z);
-        double greatest = greater(greater(points[0].z, points[1].z), points[2].z);
+		double greatest = greater(greater(points[0].z, points[1].z), points[2].z);
 
 		//return [&greatest, &distance, &intersection, this](std::vector<point>& points){
+		/*
 		static double yar_snap = yaw_angle_radians, par_snap = pitch_angle_radians, rar_snap = roll_angle_radians;
         static std::vector<point> vertices;
 		static int call_num = 0, calls_per_frame = width_px * height_px;;
@@ -289,6 +432,8 @@ struct polygon : public object{
 		#endif
 		static bool once = [&](){
             vertices = points;
+			a = points[1] - points[0], b = points[2] - points[0], c = cross_product(a, b);
+        	k = c.x * points[0].x + c.y * points[1].y + c.z * points[2].z;
 			double greatest = greater(greater(points[0].z, points[1].z), points[2].z);
 			for(point& i : vertices) stretch(greatest, i);
 			return true;
@@ -296,7 +441,8 @@ struct polygon : public object{
 		#if __cplusplus < 201703L
 		(void)once; //for no warning
 		#endif
-        if(likely(call_num < calls_per_frame)){
+        */
+		if(likely(call_num < calls_per_frame)){
         	stretch(greatest, intersection);
 			//todo: increment at the end of the frame
 			++call_num;
@@ -319,7 +465,10 @@ struct polygon : public object{
                 rar_snap = roll_angle_radians;
                 update:
                 vertices = points;
-                double greatest = greater(greater(points[0].z, points[1].z), points[2].z);
+				a = points[1] - points[0], b = points[2] - points[0], c = cross_product(a, b);
+        		//k = c.x * points[0].x + c.y * points[1].y + c.z * points[2].z;
+                k = c.x * points[0].x + c.y * points[0].y + c.z * points[0].z;
+				double greatest = greater(greater(points[0].z, points[1].z), points[2].z);
     			for(point& i : vertices) stretch(greatest, i);
             	stretch(greatest, intersection);
             }
@@ -344,7 +493,7 @@ struct polygon : public object{
                        s4 = intersection.y - vertices[0].y;
                 double w1 = (vertices[0].x * s1 + s4 * s2 - intersection.x * s1) / (s3 * s2 - (vertices[one].x - vertices[0].x) * s1),
                        w2 = (s4 - w1 * s3) / s1;
-                return std::pair<bool, double>(w1 >= 0 && w2 >= 0 && (w1 + w2) <= 1, distance);
+                return /*std::pair<bool, double>*/ hit_val(w1 >= 0 && w2 >= 0 && (w1 + w2) <= 1, distance);
             #else
                 auto sign = [](point p1, point p2, point p3) -> double{
                     return (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y);
@@ -355,7 +504,7 @@ struct polygon : public object{
                 bool neg = d1 < 0 || d2 < 0 || d3 < 0,
                      pos = d1 > 0 || d2 > 0 || d3 > 0,
                      ret = !(neg && pos);
-                return std::pair<bool, double>(ret, distance);
+                return /*std::pair<bool, double>*/ hit_val(ret, distance);
             #endif
         }
         #endif
@@ -364,7 +513,7 @@ struct polygon : public object{
             if(((vertices[i].y > intersection.y) != (vertices[j].y > intersection.y)) &&
                 (intersection.x < (vertices[j].x - vertices[i].x) * (intersection.y - vertices[i].y) / (vertices[j].y - vertices[i].y) + vertices[i].x))
                     inside = !inside;
-        return std::pair<bool, double>(inside, distance);
+        return /*std::pair<bool, double>*/ hit_val(inside, distance);
     	//}(const_cast<std::vector<point>&>(points));
 	}
     bool is_in_frustum(const plane_array& plane) const override{
@@ -405,9 +554,9 @@ struct polygon : public object{
 		//if(!corner_in_polygon) std::cout << "nooooooooooooo\n";
 		return corner_in_polygon;
 	}
-private:
-    vector a, b, c;
-    double k;
+//private:
+    //vector a, b, c;
+    //double k;
 };
 
 struct doughnut : public object{
@@ -421,7 +570,7 @@ struct doughnut : public object{
 	virtual void set_color(const color c){clr = c;}
     virtual void set_name(const char* str){name = str;}
 	virtual void set_class_name(){class_name = "doughnut";}
-	std::pair<bool, double> hit(vector u) const override{
+	/*std::pair<bool, double>*/ hit_val hit(vector u) const override{
         //u -= center; // todo: with a center other than the origin the donut does weird things
 		//already accounted for in formula but it still does weird things
 		if(yaw_rad){
@@ -466,11 +615,11 @@ struct doughnut : public object{
         long double p = 8 * c - 3 * b * b;
         long double g = 64 * e - 16 * c * c + 16 * b * b * c - 16 * b * d - 3 * b * b * b * b;
         //todo: find the distance instead of just putting 100
-        if(discriminant < 0) return std::pair<bool, double>(true, 100);
-        if(!discriminant) return std::pair<bool, double>(!(!g && p > 0 && b * b * b + 8 * d - 4 * b * c), 100);
+        if(discriminant < 0) return /*std::pair<bool, double>*/ hit_val(true, 100);
+        if(!discriminant) return /*std::pair<bool, double>*/ hit_val(!(!g && p > 0 && b * b * b + 8 * d - 4 * b * c), 100);
         //if(discriminant > 0)
         //return std::pair<bool, double>(!(p > 0 || g > 0), 100);
-        return std::pair<bool, double>(p < 0 && g < 0, 100);
+        return /*std::pair<bool, double>*/ hit_val(p < 0 && g < 0, 100);
     }
     bool is_in_frustum(const plane_array& plane) const override{
 		(void)plane; //for no warning
@@ -479,14 +628,26 @@ struct doughnut : public object{
 private:
     double epsilon;
 };
+#ifndef IMAGE
 sphere s(RGB(0, 0, 255), sqrt(100000), point(100, 41.5, 2000), "the big red sphere");
+#else
+sphere s(no_color, sqrt(100000), point(0, 0, 2000), "the big blue earth", read_rgb_image("images/projection.bmp"));
+#endif
 //doughnut d(RGB(0, 255, 0), 200, 300, point(100, 100, 5000));
 doughnut d(RGB(255, 0, 255), 90, 1500, point(0, 0, 0), "the laggy doughnut", 1.57, 1);
+#ifndef IMAGE
 point p1(-250, -300, 2400), p2(250, 200, 1500), p3(350, -100, 1000)
 #ifdef QUAD
     , p4(-250, -100, 2000)
 #endif
 ;
+#else
+point p1(-350, -165, 2400), p2(350, -165, 2400), p3(0, -1000, 2400)
+#ifdef QUAD
+	, p4(0, 1000, 24000)
+#endif
+;
+#endif
 polygon p(RGB(0, 255, 0),
 #ifdef QUAD
 "the funny quadrilateral"
@@ -527,7 +688,14 @@ std::function<void()> render =
 	++f;
     //todo: use the gpu for calculations
 	std::vector<object_pointer> can_hit;
-    plane_array plane;
+	static bool yaw_rotated = 0;
+	if(!yaw_rotated) s.image_yaw_rad += 0.0523599, yaw_rotated = abs(fmod(s.image_yaw_rad, 2 * M_PI)) <= 0.01;
+	else{
+		static bool pitch_rotated = 0;
+		if(!pitch_rotated) s.image_pitch_rad += 0.0523599, pitch_rotated = abs(fmod(s.image_pitch_rad, 2 * M_PI)) <= 0.01;
+		else yaw_rotated = 0, pitch_rotated = 0;
+	}
+	plane_array plane;
     bool ypr;
     //for clicks and stuff
     plane_setup_type create_plane = [](std::vector<object_pointer>& can_hit, plane_array& plane, bool& ypr){
@@ -538,12 +706,9 @@ std::function<void()> render =
             point(-width / 2.0, -height / 2.0, z), //bottom left
             point(width / 2.0, -height / 2.0, z) //bottom right
         };
-		#if __cplusplus < 201703L
-		#define M_PI 3.14159265358979323846
-		#endif
-        ypr = /*yaw_angle_radians*/ abs_val(fmod(yaw_angle_radians, M_PI)) > 0.01 ||
-    			   /*pitch_angle_radians*/ abs_val(fmod(pitch_angle_radians, M_PI)) > 0.01 ||
-    			   /*roll_angle_radians*/ abs_val(fmod(roll_angle_radians, M_PI)) > 0.01;
+        ypr = /*yaw_angle_radians*/ abs_val(fmod(yaw_angle_radians, 2 * M_PI)) > 0.01 ||
+    			   /*pitch_angle_radians*/ abs_val(fmod(pitch_angle_radians, 2 * M_PI)) > 0.01 ||
+    			   /*roll_angle_radians*/ abs_val(fmod(roll_angle_radians, 2 * M_PI)) > 0.01;
     	if(ypr){
     		for(point& i : bounding){
     			if(yaw_angle_radians){
@@ -601,26 +766,32 @@ std::function<void()> render =
 				int index = prev + ipx;
 				vector v(row_vx, -row_vy, row_vz);
 				object_pointer smallest = can_hit[0];
-				std::pair<bool, double> hit_b = smallest->hit(v);
-				bool hit_nothing = !hit_b.first, small_change = false;
+				/*std::pair<bool, double>*/ hit_val hit_b = smallest->hit(v);
+				bool hit_nothing = !hit_b.first;//, small_change = false;
 				//todo: likely and unlikely might be unnecessary
 				for(int w = 1; w < (int)can_hit.size(); ++w){
 					//if(comp(hit_nothing, v, world[i], smallest)) smallest = world[i];
-					std::pair<bool, double> hit_a = can_hit[w]->hit(v);				
-					if(small_change) hit_b = smallest->hit(v), small_change = false;
+					/*std::pair<bool, double>*/ hit_val hit_a = can_hit[w]->hit(v);				
+					//todo: why small change?
+					//if(small_change) hit_b = smallest->hit(v), small_change = false;
 
 					if(unlikely(hit_a.first)){
 						hit_nothing = false;
 						if(unlikely(hit_b.first)){
 							if(hit_a.second < hit_b.second)
-								smallest = can_hit[w], small_change = true;
+								smallest = can_hit[w], hit_b = smallest->hit(v);//small_change = true;
 						}
-						else smallest = can_hit[w], small_change = true;
+						else smallest = can_hit[w], hit_b = smallest->hit(v);//small_change = true;
 					}
 					else hit_nothing = !hit_b.first;
 				}
 				if(likely(hit_nothing)) framebuf[index] = RGB(255, 255, 255);//RGB(255, 0, 0);
-				else framebuf[index] = smallest->clr;
+				else 
+				#ifndef IMAGE
+					framebuf[index] = smallest->clr;
+				#else
+					framebuf[index] = (hit_b.third != no_color ? hit_b.third : smallest->clr);
+				#endif
 			}
 		}
 	}else{
@@ -632,26 +803,32 @@ std::function<void()> render =
 				vector v(-width / 2 + i, height / 2 - j, z);
 
 				object_pointer smallest = can_hit[0];
-				std::pair<bool, double> hit_b = smallest->hit(v);
-				bool hit_nothing = !hit_b.first, small_change = false;
+				/*std::pair<bool, double>*/ hit_val hit_b = smallest->hit(v);
+				bool hit_nothing = !hit_b.first;//, small_change = false;
 				//todo: likely and unlikely might be unnecessary
 				for(int w = 1; w < (int)can_hit.size(); ++w){
 					//if(comp(hit_nothing, v, world[i], smallest)) smallest = world[i];
-					std::pair<bool, double> hit_a = can_hit[w]->hit(v);
-					if(small_change) hit_b = smallest->hit(v), small_change = false;
+					/*std::pair<bool, double>*/ hit_val hit_a = can_hit[w]->hit(v);
+					//if(small_change) hit_b = smallest->hit(v), small_change = false;
 
 					if(unlikely(hit_a.first)){
 						hit_nothing = false;
 						if(unlikely(hit_b.first)){
 							if(hit_a.second < hit_b.second)
-								smallest = can_hit[w], small_change = true;
+								smallest = can_hit[w], hit_b = smallest->hit(v);//small_change = true;
 						}
-						else smallest = can_hit[w], small_change = true;
+						else smallest = can_hit[w], hit_b = smallest->hit(v);//small_change = true;
 					}
 					else hit_nothing = !hit_b.first;
 				}
 				if(likely(hit_nothing)) framebuf[index] = RGB(255, 255, 255);//RGB(255, 0, 0);
-				else framebuf[index] = smallest->clr;
+				else 
+				#ifndef IMAGE
+					framebuf[index] = smallest->clr;
+				#else
+					framebuf[index] = (hit_b.third != no_color ? hit_b.third : smallest->clr);
+				#endif
+
 			}
 		}
 	}
@@ -755,21 +932,22 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
 			else
 				v = vector(-width / 2 + x * pixel_inc, height / 2 - y * pixel_inc, z);
 			object_pointer smallest = can_hit[0];
-			std::pair<bool, double> hit_b = smallest->hit(v);
-			bool hit_nothing = !hit_b.first, small_change = false;
+			std::cout << smallest->class_name << '\n';
+			/*std::pair<bool, double>*/ hit_val hit_b = smallest->hit(v);
+			bool hit_nothing = !hit_b.first;//, small_change = false;
 			//todo: likely and unlikely might be unnecessary
 			for(int w = 1; w < (int)can_hit.size(); ++w){
 				//if(comp(hit_nothing, v, world[i], smallest)) smallest = world[i];
-				std::pair<bool, double> hit_a = can_hit[w]->hit(v);				
-				if(small_change) hit_b = smallest->hit(v), small_change = false;
+				/*std::pair<bool, double>*/ hit_val hit_a = can_hit[w]->hit(v);				
+				//if(small_change) hit_b = smallest->hit(v), small_change = false;
 				
 				if(unlikely(hit_a.first)){
 					hit_nothing = false;
 					if(unlikely(hit_b.first)){
 						if(hit_a.second < hit_b.second)
-							smallest = can_hit[w], small_change = true;
+							smallest = can_hit[w], hit_b = smallest->hit(v);//small_change = true;
 					}
-					else smallest = can_hit[w], small_change = true;
+					else smallest = can_hit[w], hit_b = smallest->hit(v);//small_change = true;
 				}
 				else hit_nothing = !hit_b.first;
 			}

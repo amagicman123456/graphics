@@ -32,6 +32,8 @@ options:
 
 * -DSOUND -lwinmm -lstdc++fs: play sounds when clicking shapes :D
 
+* -DIMAGE: render images on the shapes (sphere turns into earth) :D
+
 * -Dhorizontal_fov=[value]: set the horizontal fov to [value] degrees/radians (depending on if -Din_radians is set)
 
 * -Din_radians: specify that the horizontal fov set is in radians
