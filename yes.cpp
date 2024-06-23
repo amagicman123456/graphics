@@ -53,6 +53,42 @@ struct image{
 	}
 	//make iterators if wanted
 };
+/*
+#if __cplusplus >= 201703L
+#define read_rgb_image_from_buffer(buf) []() constexpr -> image{\
+	uint32_t width = *reinterpret_cast<uint32_t*>(buf + 18)\
+	int32_t height = *reinterpret_cast<int32_t*>(buf + 22);\
+	bool sign = height > 0;\
+	uint32_t size = 3 * width * (sign ? height : -height);\
+	std::unique_ptr<uint8_t[]> data = std::make_unique<uint8_t[]>(size);\
+	bitmap.seekg(*reinterpret_cast<uint32_t*>(buf + 10), std::ios_base::beg);\
+	bitmap.read(reinterpret_cast<char*>(data.get()), size);\
+	if(sign)\
+		for(uint32_t i = 0; i < size; i += 3){\
+			uint8_t temp = data[i];\
+			data[i] = data[i + 2];\
+			data[i + 2] = temp;\
+		}\
+	return image(width, height, std::move(data));\
+}()
+#else
+#define read_rgb_image_from_buffer(buf) []() -> image{\
+	uint32_t width = *reinterpret_cast<uint32_t*>(buf + 18)\
+	int32_t height = *reinterpret_cast<int32_t*>(buf + 22);\
+	bool sign = height > 0;\
+	uint32_t size = 3 * width * (sign ? height : -height);\
+	std::unique_ptr<uint8_t[]> data = std::make_unique<uint8_t[]>(size);\
+	bitmap.seekg(*reinterpret_cast<uint32_t*>(buf + 10), std::ios_base::beg);\
+	bitmap.read(reinterpret_cast<char*>(data.get()), size);\
+	if(sign)\
+		for(uint32_t i = 0; i < size; i += 3){\
+			uint8_t temp = data[i];\
+			data[i] = data[i + 2];\
+			data[i + 2] = temp;\
+		}\
+	return image(width, height, std::move(data));\
+}()
+*/
 image read_rgb_image(const char* path){
 	std::ifstream bitmap{path, std::ios::in | std::ios::binary};
 	if(!bitmap) return image(0, 0, std::unique_ptr<uint8_t[]>(nullptr));
@@ -87,7 +123,7 @@ void fps(void*){
         f = 0;
     }
 }
-int width_px = 1200, height_px = 600, tick_count;
+int width_px = 1200, height_px = 600;//, tick_count;
 uint32_t *framebuf;
 double width = 1, height = height_px / (double)width_px,
        pixel_inc = width / width_px;
@@ -129,6 +165,7 @@ struct point{
 	/* if needed
 	#if __cplusplus >= 202002L
 	auto operator<=>(const point& other) const{
+		//this is not correct
 		if(x == other.x){
 			if(y == other.y){
 				if(z == other.z)
@@ -146,9 +183,11 @@ struct point{
 	bool operator==(const point& other) const{
 		return x == other.x && y == other.y && z == other.z;
 	}
+	#if __cplusplus < 202002L
 	bool operator!=(const point& other) const{
 		return !this->operator==(other);
 	}
+	#endif
 	//implement >, <, >=, <= if needed
 	#endif
 	*/
@@ -356,10 +395,22 @@ struct sphere : public object{
 };
 struct polygon : public object{
     const std::vector<point> points/*{}*/;
-    polygon(color cl, const char* n, auto... l) try /*: clr(cl)*/ : points{(point(l))...}{
+	#ifdef IMAGE
+    polygon(color cl, const char* n, image&& i, auto... l) try : points{(point(l))...}{
+		set_color(cl);
+		set_class_name();
+		set_name(n);
+		set_image(std::move(i));
+		if(sizeof...(l) < 3) throw;
+	}catch(...){std::cout << "error: number of points to polygon's constructor must be greater than two\n";}
+	#endif
+	polygon(color cl, const char* n, auto... l) try /*: clr(cl)*/ : points{(point(l))...}{
         set_color(cl);
 		set_class_name();
 		set_name(n);
+		#ifdef IMAGE
+		set_image(std::move(read_rgb_image("")));
+		#endif
         if(sizeof...(l) < 3) throw;
         //points = {(point(l))...};
         //a = points[1] - points[0], b = points[2] - points[0], c = cross_product(a, b);
@@ -369,13 +420,19 @@ struct polygon : public object{
         set_color(cl);
 		set_class_name();
 		set_name("the default polygon");
-        if(sizeof...(l) < 3) throw;
+        #ifdef IMAGE
+		set_image(std::move(read_rgb_image("")));
+		#endif
+		if(sizeof...(l) < 3) throw;
         //points = {(point(l))...};
         //a = points[1] - points[0], b = points[2] - points[0], c = cross_product(a, b);
         //k = c.x * points[0].x + c.y * points[1].y + c.z * points[2].z;
     }catch(...){std::cout << "error: number of points to polygon's constructor must be greater than two\n";}
 	virtual void set_color(const color c){clr = c;}
     virtual void set_name(const char* str){name = str;}
+	#ifdef IMAGE
+	virtual void set_image(image&& i){img = std::move(i);}
+	#endif
 	virtual void set_class_name(){class_name = "polygon";}
 	void stretch(const double& greatest, point& p) const{
 		//fix to accomodate for yar par and rar
@@ -394,19 +451,31 @@ struct polygon : public object{
 		
 		static double yar_snap = yaw_angle_radians, par_snap = pitch_angle_radians, rar_snap = roll_angle_radians;
         static std::vector<point> vertices;
+		static bool is_triangle;
 		static int call_num = 0, calls_per_frame = width_px * height_px;
 		static vector a, b, c;
 		static double k;
+		#ifdef IMAGE
+		static point centroid;
+		#endif
 		#if __cplusplus >= 201703L
 		[[maybe_unused]]
 		#endif
 		static bool once = [&](){
             vertices = points;
+			is_triangle = (points.size() == 3);
 			a = points[1] - points[0], b = points[2] - points[0], c = cross_product(a, b);
         	//k = c.x * points[0].x + c.y * points[1].y + c.z * points[2].z;
 			k = c.x * points[0].x + c.y * points[0].y + c.z * points[0].z;
 			double greatest = greater(greater(points[0].z, points[1].z), points[2].z);
 			for(point& i : vertices) stretch(greatest, i);
+			#ifdef IMAGE
+			if(is_triangle) 
+				centroid.x = (vertices[0].x + vertices[1].x + vertices[2].x) / 3, 
+				centroid.y = (vertices[0].y + vertices[1].y + vertices[2].y) / 3,
+				centroid.z = greatest;
+			else{/*calculate*/}
+			#endif
 			return true;
 		}();
 		#if __cplusplus < 201703L
@@ -465,19 +534,27 @@ struct polygon : public object{
                 rar_snap = roll_angle_radians;
                 update:
                 vertices = points;
+				is_triangle = (points.size() == 3);
 				a = points[1] - points[0], b = points[2] - points[0], c = cross_product(a, b);
         		//k = c.x * points[0].x + c.y * points[1].y + c.z * points[2].z;
                 k = c.x * points[0].x + c.y * points[0].y + c.z * points[0].z;
 				double greatest = greater(greater(points[0].z, points[1].z), points[2].z);
     			for(point& i : vertices) stretch(greatest, i);
-            	stretch(greatest, intersection);
+            	#ifdef IMAGE
+				if(is_triangle) 
+					centroid.x = (vertices[0].x + vertices[1].x + vertices[2].x) / 3, 
+					centroid.y = (vertices[0].y + vertices[1].y + vertices[2].y) / 3,
+					centroid.z = greatest;
+				else{/*calculate*/}
+				#endif
+				stretch(greatest, intersection);
             }
         }
         //#define tri_specialization
         //#define first_algorithm
 
         #ifdef tri_specialization
-        if(vertices.size() == 3){
+        if(/*vertices.size() == 3*/ is_triangle){
             #ifdef first_algorithm
 				int one = 1, two = 2;
                 if(vertices[2].y == vertices[0].y){
@@ -493,8 +570,12 @@ struct polygon : public object{
                        s4 = intersection.y - vertices[0].y;
                 double w1 = (vertices[0].x * s1 + s4 * s2 - intersection.x * s1) / (s3 * s2 - (vertices[one].x - vertices[0].x) * s1),
                        w2 = (s4 - w1 * s3) / s1;
+				#ifndef IMAGE
                 return /*std::pair<bool, double>*/ hit_val(w1 >= 0 && w2 >= 0 && (w1 + w2) <= 1, distance);
-            #else
+            	#else
+				//do
+				#endif
+			#else
                 auto sign = [](point p1, point p2, point p3) -> double{
                     return (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y);
                 };
@@ -504,8 +585,12 @@ struct polygon : public object{
                 bool neg = d1 < 0 || d2 < 0 || d3 < 0,
                      pos = d1 > 0 || d2 > 0 || d3 > 0,
                      ret = !(neg && pos);
-                return /*std::pair<bool, double>*/ hit_val(ret, distance);
-            #endif
+				#ifndef IMAGE
+				return /*std::pair<bool, double>*/ hit_val(ret, distance);
+            	#else
+				//do
+				#endif
+			#endif
         }
         #endif
         bool inside = false;
@@ -513,8 +598,20 @@ struct polygon : public object{
             if(((vertices[i].y > intersection.y) != (vertices[j].y > intersection.y)) &&
                 (intersection.x < (vertices[j].x - vertices[i].x) * (intersection.y - vertices[i].y) / (vertices[j].y - vertices[i].y) + vertices[i].x))
                     inside = !inside;
-        return /*std::pair<bool, double>*/ hit_val(inside, distance);
-    	//}(const_cast<std::vector<point>&>(points));
+		#ifndef IMAGE
+		return /*std::pair<bool, double>*/ hit_val(inside, distance);
+		#else
+		if(!is_triangle) return hit_val(inside, distance);
+		if(!img.width || !img.height) return hit_val(inside, distance);
+		//int x = img.width / 2 + intersection.x - centroid.x, y = img.height / 2 + intersection.y - centroid.y;
+	 	double triangle_width = greater(greater(abs_val(vertices[1].x - vertices[0].x), abs_val(vertices[2].x - vertices[0].x)), abs_val(vertices[2].x - vertices[1].x)), triangle_height = greater(greater(abs_val(vertices[1].y - vertices[0].y), abs_val(vertices[2].y - vertices[0].y)), abs_val(vertices[2].y - vertices[1].y)); 
+		double x = 0.5 + (intersection.x - centroid.x) / /*700 triangle width*/triangle_width, y = 0.5 + (intersection.y - centroid.y) / /*triangle height*/triangle_height;
+		//color hit_color = img.color_at(x, y);
+		if(x < 0 || x > 1 || y < 0 || y > 1) return hit_val(inside, distance, RGB(255, 255, 255));
+		color hit_color = img.color_at(x * img.width, y * img.height);
+		return hit_val(inside, distance, hit_color);
+		#endif
+		//}(const_cast<std::vector<point>&>(points));
 	}
     bool is_in_frustum(const plane_array& plane) const override{
 		for(const point& i : points){
@@ -631,7 +728,7 @@ private:
 #ifndef IMAGE
 sphere s(RGB(0, 0, 255), sqrt(100000), point(100, 41.5, 2000), "the big red sphere");
 #else
-sphere s(no_color, sqrt(100000), point(0, 0, 2000), "the big blue earth", read_rgb_image("images/earth.bmp"));
+sphere s(no_color, sqrt(100000), point(0, 50, 2000), "the big blue earth", read_rgb_image("images/earth.bmp"));
 #endif
 //doughnut d(RGB(0, 255, 0), 200, 300, point(100, 100, 5000));
 doughnut d(RGB(255, 0, 255), 90, 1500, point(0, 0, 0), "the laggy doughnut", 1.57, 1);
@@ -642,17 +739,26 @@ point p1(-250, -300, 2400), p2(250, 200, 1500), p3(350, -100, 1000)
 #endif
 ;
 #else
-point p1(-350, -165, 2400), p2(350, -165, 2400), p3(0, -1000, 2400)
+point p1(-350, -165, 2400), p2(350, -165, 2400), p3(0, /*-1000*/-1400, 2400)
 #ifdef QUAD
 	, p4(0, 1000, 24000)
 #endif
 ;
 #endif
-polygon p(RGB(0, 255, 0),
+polygon p(
+#ifndef IMAGE
+RGB(0, 255, 0)
+#else
+no_color
+#endif
+,
 #ifdef QUAD
 "the funny quadrilateral"
 #else
 "the funny triangle"
+#endif
+#ifdef IMAGE
+, read_rgb_image("images/cone.bmp")
 #endif
 , p1, p2, p3
 #ifdef QUAD
@@ -932,7 +1038,6 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
 			else
 				v = vector(-width / 2 + x * pixel_inc, height / 2 - y * pixel_inc, z);
 			object_pointer smallest = can_hit[0];
-			std::cout << smallest->class_name << '\n';
 			/*std::pair<bool, double>*/ hit_val hit_b = smallest->hit(v);
 			bool hit_nothing = !hit_b.first;//, small_change = false;
 			//todo: likely and unlikely might be unnecessary
@@ -976,7 +1081,7 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
             UpdateWindow(hwnd);
             break;
         case WM_PAINT:{
-            tick_count = GetTickCount();
+            //tick_count = GetTickCount();
             PAINTSTRUCT ps;
             HDC h = BeginPaint(hwnd, &ps);
             render();
