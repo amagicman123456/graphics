@@ -41,7 +41,10 @@ double plane_distance(plane bound, point p){
 }
 int main(){
 	//plane p{point(0, 0, 0), point(0, 0, -50), point(0, -50, 0)};
-	constexpr int width = 1200, height = 600, z = 1336; // magic arbitrary value
+	constexpr int width_px = 1200, height_px = 600;
+	constexpr double ratio = height / (double)width;
+	constexpr double width = 1, height = ratio;
+	constexpr double z = 0.497903;
     plane p{
         point(-width / 2, -height / 2, z),
         point(width / 2, -height / 2, z),
