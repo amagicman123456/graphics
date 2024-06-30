@@ -112,15 +112,15 @@ image read_rgb_image(const char* path){
 #endif
 #define likely(x) __builtin_expect(!!(x), 1)
 #define unlikely(x) __builtin_expect(!!(x), 0)
-std::atomic<int> f(0);
+std::atomic<int> framerate(0);
 std::atomic<double> yaw_angle_radians(0);
 std::atomic<double> pitch_angle_radians(0);
 std::atomic<double> roll_angle_radians(0);
 void fps(void*){
     while(1){
         Sleep(1000);
-        std::cout << f << '\n';
-        f = 0;
+        std::cout << framerate << '\n';
+        framerate = 0;
     }
 }
 int width_px = 1200, height_px = 600;//, tick_count;
@@ -156,11 +156,40 @@ struct point{
         z -= g.z;
         return *this;
     }
+	inline point& operator+=(point o){
+		x += o.x;
+		y += o.y;
+		z += o.z;
+		return *this;
+	}
     inline point operator*(double h) const{
         return point(x * h, y * h, z * h);
     }
 	inline point operator/(double i) const{
 		return point(x / i, y / i, z / i);
+	}
+	void rotate_yaw(double y){
+		if(y){
+			double cos_yar = cos(y), sin_yar = sin(y), sin_yar_x = sin_yar * this->x;
+			this->x = cos_yar * this->x + sin_yar * this->z;
+			this->z = -sin_yar_x + cos_yar * this->z;
+		}
+	}
+	void rotate_pitch(double p){
+		if(p){
+			//todo: check if pitch is actually correct (make it so positive always migrates to top instead of going in circles)
+			double cos_par = cos(p), sin_par = sin(p), sin_par_y = sin_par * this->y;
+			this->y = cos_par * this->y - sin_par * this->z;
+			this->z = sin_par_y + cos_par * this->z;
+		}
+	}
+	void rotate_roll(double r){
+		if(r){
+			//todo: check if roll is actually correct
+			double cos_rar = cos(r), sin_rar = sin(r), sin_rar_x = sin_rar * this->x;
+			this->x = cos_rar * this->x - sin_rar * this->y;
+			this->y = sin_rar_x + cos_rar * this->y;
+		}
 	}
 	/* if needed
 	#if __cplusplus >= 202002L
@@ -220,8 +249,16 @@ struct object{
 	#endif
 	virtual void set_name(const char* str){name = str;}
 	const char *class_name, *name;
+	double yaw_rad, pitch_rad, roll_rad;
+	std::function<void(const vector&)> pressed = [](const vector&){};
+	virtual void on_hit(const std::function<void(const vector&)>& input_function){pressed = input_function;}
+	virtual void set_rotation(const double y, const double p, const double r){yaw_rad = y, pitch_rad = p, roll_rad = r;}
+	virtual void set_yaw(const double y){yaw_rad = y;}
+	virtual void set_pitch(const double p){pitch_rad = p;}
+	virtual void set_roll(const double r){roll_rad = r;}
 };
-typedef object* object_pointer; //maybe change it to unique_ptr or shared_ptr idk
+//typedef object* object_pointer; //maybe change it to unique_ptr or shared_ptr idk
+typedef object* object_pointer;
 double plane_distance(const plane& bound, const point& p){ 
 	vector a = bound[1] - bound[0], b = bound[2] - bound[0], cross = cross_product(a, b);
 	double cross_mag = sqrt(cross.x * cross.x + cross.y * cross.y + cross.z * cross.z);
@@ -231,20 +268,21 @@ double plane_distance(const plane& bound, const point& p){
 struct sphere : public object{
     double radius;
     point center;
-	#ifdef IMAGE
-	double image_yaw_rad, image_pitch_rad, image_roll_rad;
-	#endif
+	//#ifdef IMAGE
+	//double image_yaw_rad, image_pitch_rad, image_roll_rad;
+	//#endif
     sphere(color cl, double r, point c, const char* n = "the default sphere"
 	#ifdef IMAGE
-	, image&& i = read_rgb_image(""), double yaw_rad = 0, double pitch_rad = 0, double roll_rad = 0
+	, image&& i = read_rgb_image(""), double yr = 0, double pr  = 0, double rr = 0
 	#endif 
 	) : radius(r), center(c)
+	//#ifdef IMAGE
+	//, image_yaw_rad(yaw_rad), image_pitch_rad(pitch_rad), image_roll_rad(roll_rad)
+	//#endif
+	//, yaw_rad(y), pitch_rad(p), roll_rad(r)
+	{set_color(cl), set_class_name(), set_name(n)//, set_rotation(yr, pr, rr)
 	#ifdef IMAGE
-	, image_yaw_rad(yaw_rad), image_pitch_rad(pitch_rad), image_roll_rad(roll_rad)
-	#endif
-	{set_color(cl), set_class_name(), set_name(n)
-	#ifdef IMAGE
-	, set_image(std::move(i))
+	, set_image(std::move(i)), set_rotation(yr, pr, rr)
 	#endif
 	;
 	}
@@ -254,7 +292,12 @@ struct sphere : public object{
 	virtual void set_image(image&& i){img = std::move(i);}
 	#endif
 	virtual void set_class_name(){class_name = "sphere";}
-    /*std::pair<bool, double>*/ hit_val hit(vector u) const override{
+    virtual void on_hit(const std::function<void(const vector&)>& input_function){pressed = input_function;}
+	virtual void set_rotation(const double y, const double p, const double r){yaw_rad = y, pitch_rad = p, roll_rad = r;}
+	virtual void set_yaw(const double y){yaw_rad = y;}
+	virtual void set_pitch(const double p){pitch_rad = p;}
+	virtual void set_roll(const double r){roll_rad = r;}
+	/*std::pair<bool, double>*/ hit_val hit(vector u) const override{
         //todo: do the same thing for u.x and u.y
 		if((u.z > 0 && center.z < radius) || (u.z < 0 && center.z > radius)) return /*std::pair<bool, double>*/ hit_val(false, 0);
 		/*	
@@ -270,40 +313,54 @@ struct sphere : public object{
         return std::pair<bool, double>(true, (-dot - sqrt(determinant)) / magnitude_squared);
 		*/
 		//todo: its the correct difference but normalizing requires a sqrt
+		#if 1
 		double magnitude = sqrt(u.x * u.x + u.y * u.y + u.z * u.z);
 		u.x /= magnitude, u.y /= magnitude, u.z /= magnitude;
 		double dot = dot_product(u, -center);
 		double determinant = dot * dot - (center.x * center.x + center.y * center.y + center.z * center.z - radius * radius);
+		#else
+		//todo: doesnt work for non-unit vectors ig
+		double a = dot_product(u, u), b = 2 * dot_product(u, -center), c = dot_product(center, center) - radius * radius;
+		double determinant = b * b - 4 * a * c;
+		#endif
 		if(determinant < 0) return /*std::pair<bool, double>*/ hit_val(false, 0);
 		double distance = -dot - sqrt(determinant);
+		//double distance = (-b - sqrt(determinant)) / (2 * a);
+		//std::cout << distance << '\n';
+		pressed(u);
 		#ifndef IMAGE
 		return /*std::pair<bool, double>*/ hit_val(true, distance);
 		#else
 		if(!img.width || !img.height) return hit_val(true, distance);
 		vector hit_spot = (u * distance) - center;
-		if(image_yaw_rad){
-			double cos_yar = cos(image_yaw_rad), sin_yar = sin(image_yaw_rad), sin_yar_x = sin_yar * hit_spot.x;
+		hit_spot.rotate_yaw(yaw_rad);
+		hit_spot.rotate_pitch(pitch_rad);
+		hit_spot.rotate_roll(roll_rad);
+		#if 0
+		if(/*image_*/yaw_rad){
+			double cos_yar = cos(/*image_*/yaw_rad), sin_yar = sin(/*image_*/yaw_rad), sin_yar_x = sin_yar * hit_spot.x;
 			hit_spot.x = cos_yar * hit_spot.x + sin_yar * hit_spot.z;
 			hit_spot.z = -sin_yar_x + cos_yar * hit_spot.z;
 		}
-		if(image_pitch_rad){
+		if(/*image_*/pitch_rad){
 			//todo: check if pitch is actually correct (make it so positive always migrates to top instead of going in circles)
-			double cos_par = cos(image_pitch_rad), sin_par = sin(image_pitch_rad), sin_par_y = sin_par * hit_spot.y;
+			double cos_par = cos(/*image_*/pitch_rad), sin_par = sin(/*image_*/pitch_rad), sin_par_y = sin_par * hit_spot.y;
 			hit_spot.y = cos_par * hit_spot.y - sin_par * hit_spot.z;
 			hit_spot.z = sin_par_y + cos_par * hit_spot.z;
 		}
-		if(image_roll_rad){
+		if(/*image_*/roll_rad){
 			//todo: check if roll is actually correct
-			double cos_rar = cos(image_roll_rad), sin_rar = sin(image_roll_rad), sin_rar_x = sin_rar * hit_spot.x;
+			double cos_rar = cos(/*image_*/roll_rad), sin_rar = sin(/*image_*/roll_rad), sin_rar_x = sin_rar * hit_spot.x;
 			hit_spot.x = cos_rar * hit_spot.x - sin_rar * hit_spot.y;
 			hit_spot.y = sin_rar_x + cos_rar * hit_spot.y;
 		}
+		#endif
 		double hit_spot_magnitude = sqrt(hit_spot.x * hit_spot.x + hit_spot.y * hit_spot.y + hit_spot.z * hit_spot.z);
 		hit_spot.x /= hit_spot_magnitude, hit_spot.y /= hit_spot_magnitude, hit_spot.z /= hit_spot_magnitude;
 		{
 			double u = 0.5 + atan2(hit_spot.z, hit_spot.x) / (2 * M_PI);
 			double v = 0.5 + asin(hit_spot.y) / M_PI;
-			int x = lrint(u * img.width), y = lrint(v * img.height);
+			long x = lrint(u * img.width), y = lrint(v * img.height);
 			color hit_color = img.color_at(x, y);
 			return hit_val(true, distance, hit_color);
 		}
@@ -394,7 +451,7 @@ struct sphere : public object{
 	}
 };
 struct polygon : public object{
-    const std::vector<point> points/*{}*/;
+    std::vector<point> points/*{}*/;
 	#ifdef IMAGE
     polygon(color cl, const char* n, image&& i, auto... l) try : points{(point(l))...}{
 		set_color(cl);
@@ -434,6 +491,67 @@ struct polygon : public object{
 	virtual void set_image(image&& i){img = std::move(i);}
 	#endif
 	virtual void set_class_name(){class_name = "polygon";}
+	virtual void on_hit(const std::function<void(const vector&)>& input_function){pressed = input_function;}
+	point calculate_centroid() const{
+		static point centroid;
+		if(points.size() == 3){
+			centroid.x = (points[0].x + points[1].x + points[2].x) / 3, 
+			centroid.y = (points[0].y + points[1].y + points[2].y) / 3,
+			centroid.z = (points[0].z + points[1].z + points[2].z) / 3;
+		}else{/*todo: calculate*/}
+		return centroid;
+	}
+	virtual void set_rotation(const double y, const double p, const double r){
+		point centroid = calculate_centroid();
+		#if 0
+		#if __cplusplus >= 201703L
+		[[maybe_unused]]
+		#endif
+		static bool once = [&](){
+			if(is_triangle) 
+				centroid.x = (points[0].x + points[1].x + points[2].x) / 3, 
+				centroid.y = (points[0].y + points[1].y + points[2].y) / 3,
+				centroid.z = greatest;
+			else{/*todo: calculate*/}
+		};
+		#if __cplusplus < 201703L
+		(void)once; //for no warning
+		#endif
+		#endif
+		yaw_rad = y, pitch_rad = p, roll_rad = r;
+		for(point& i : points){
+			i -= centroid;
+			i.rotate_yaw(y), i.rotate_pitch(p), i.rotate_roll(r);
+			i += centroid;
+		}
+	}
+	virtual void set_yaw(const double y){
+		point centroid = calculate_centroid();
+		yaw_rad = y;
+		for(point& i : points){
+			i -= centroid;
+			i.rotate_yaw(y);
+			i += centroid;
+		}
+	}
+	virtual void set_pitch(const double p){
+		point centroid = calculate_centroid();
+		pitch_rad = p;
+		for(point& i : points){
+			i -= centroid;
+			i.rotate_pitch(p);
+			i += centroid;
+		}
+	}
+	virtual void set_roll(const double r){
+		point centroid = calculate_centroid();
+		roll_rad = r;
+		for(point& i : points){
+			i -= centroid;
+			i.rotate_roll(r);
+			i += centroid;
+		}
+	}
 	void stretch(const double& greatest, point& p) const{
 		//fix to accomodate for yar par and rar
         double factor = greatest / p.z;
@@ -442,15 +560,50 @@ struct polygon : public object{
         p.z = greatest;
     };
     /*std::pair<bool, double>*/ hit_val hit(vector u) const override{
-        //todo: do the same thing for u.x and u.y
-        
+		
+		static double yar_snap = yaw_angle_radians, par_snap = pitch_angle_radians, rar_snap = roll_angle_radians;
+		static double y_snap = yaw_rad, p_snap = pitch_rad, r_snap = roll_rad;
+		static std::vector<point> vertices;
+		static bool is_triangle;
+		static int call_num = 0, calls_per_frame = width_px * height_px;
+		static vector a, b, c;
+		static double k;
+		#ifdef IMAGE
+		static point centroid;
+		#endif
+		#if __cplusplus >= 201703L
+		[[maybe_unused]]
+		#endif
+		static bool once = [&](){
+            vertices = points;
+			is_triangle = (points.size() == 3);
+			a = points[1] - points[0], b = points[2] - points[0], c = cross_product(a, b);
+        	//k = c.x * points[0].x + c.y * points[1].y + c.z * points[2].z;
+			k = c.x * points[0].x + c.y * points[0].y + c.z * points[0].z;
+			double greatest = greater(greater(points[0].z, points[1].z), points[2].z);
+			for(point& i : vertices) stretch(greatest, i);
+			#ifdef IMAGE
+			if(is_triangle) 
+				centroid.x = (vertices[0].x + vertices[1].x + vertices[2].x) / 3, 
+				centroid.y = (vertices[0].y + vertices[1].y + vertices[2].y) / 3,
+				centroid.z = greatest;
+			else{/*todo: calculate*/}
+			#endif
+			return true;
+		}();
+		#if __cplusplus < 201703L
+		(void)once; //for no warning
+		#endif
+
+		//todo: do the same thing for u.x and u.y
 		for(const point& i : points) //maybe change to vertices
             if((u.z < 0 && i.z < 0) || (u.z > 0 && i.z > 0)) goto polygon_start;
        	return /*std::pair<bool, double>*/ hit_val(false, 0);
         polygon_start:
-		
+		#if 0
 		static double yar_snap = yaw_angle_radians, par_snap = pitch_angle_radians, rar_snap = roll_angle_radians;
-        static std::vector<point> vertices;
+       	static double y_snap = yaw_rad, p_snap = pitch_rad, r_snap = roll_rad;
+ 		static std::vector<point> vertices;
 		static bool is_triangle;
 		static int call_num = 0, calls_per_frame = width_px * height_px;
 		static vector a, b, c;
@@ -481,7 +634,7 @@ struct polygon : public object{
 		#if __cplusplus < 201703L
 		(void)once; //for no warning
 		#endif
-
+		#endif
         double e = u.x * c.x + u.y * c.y + u.z * c.z;
         double t = k / e;
         if(likely(!e || (u.z * t < 0))) return /*std::pair<bool, double>*/ hit_val(false, 0);
@@ -513,7 +666,6 @@ struct polygon : public object{
         */
 		if(likely(call_num < calls_per_frame)){
         	stretch(greatest, intersection);
-			//todo: increment at the end of the frame
 			++call_num;
 		}else{
             call_num = 0;
@@ -522,7 +674,11 @@ struct polygon : public object{
 				if(vertices[i].x != points[i].x || vertices[i].y != points[i].y) goto update;
 			if(calls_per_frame != width_px * height_px)
                 calls_per_frame = width_px * height_px;
-            if(yar_snap != yaw_angle_radians){
+			if(y_snap != yaw_rad || p_snap != pitch_rad || r_snap != roll_rad){
+				y_snap = yaw_rad, p_snap = pitch_rad, r_snap = roll_rad;
+				goto update;
+			}
+			if(yar_snap != yaw_angle_radians){
                 yar_snap = yaw_angle_radians; 
                 goto update;
             }
@@ -549,6 +705,13 @@ struct polygon : public object{
 				#endif
 				stretch(greatest, intersection);
             }
+			/*
+			if(y_snap != yaw_rad || p_snap != pitch_rad || r_snap != roll_rad){
+				y_snap = yaw_rad, p_snap = pitch_rad, r_snap = roll_rad;
+				for(point& i : points)
+					i.rotate_yaw(yaw_rad), i.rotate_pitch(pitch_rad), i.rotate_roll(roll_rad);
+			}
+			*/
         }
         //#define tri_specialization
         //#define first_algorithm
@@ -571,7 +734,10 @@ struct polygon : public object{
                 double w1 = (vertices[0].x * s1 + s4 * s2 - intersection.x * s1) / (s3 * s2 - (vertices[one].x - vertices[0].x) * s1),
                        w2 = (s4 - w1 * s3) / s1;
 				#ifndef IMAGE
-                return /*std::pair<bool, double>*/ hit_val(w1 >= 0 && w2 >= 0 && (w1 + w2) <= 1, distance);
+				bool hit_polygon = w1 >= 0 && w2 >= 0 && (w1 + w2) <= 1;
+				if(hit_polygon) pressed(u);
+				return hit_val(hit_polygon, distance);
+                //return /*std::pair<bool, double>*/ hit_val(w1 >= 0 && w2 >= 0 && (w1 + w2) <= 1, distance);
             	#else
 				//do
 				#endif
@@ -585,6 +751,7 @@ struct polygon : public object{
                 bool neg = d1 < 0 || d2 < 0 || d3 < 0,
                      pos = d1 > 0 || d2 > 0 || d3 > 0,
                      ret = !(neg && pos);
+				if(ret) pressed(u);
 				#ifndef IMAGE
 				return /*std::pair<bool, double>*/ hit_val(ret, distance);
             	#else
@@ -598,6 +765,7 @@ struct polygon : public object{
             if(((vertices[i].y > intersection.y) != (vertices[j].y > intersection.y)) &&
                 (intersection.x < (vertices[j].x - vertices[i].x) * (intersection.y - vertices[i].y) / (vertices[j].y - vertices[i].y) + vertices[i].x))
                     inside = !inside;
+		if(inside) pressed(u);
 		#ifndef IMAGE
 		return /*std::pair<bool, double>*/ hit_val(inside, distance);
 		#else
@@ -659,17 +827,23 @@ struct polygon : public object{
 struct doughnut : public object{
     point center;
     double minor_radius, major_radius;
-    double yaw_rad, pitch_rad;
+    //double yaw_rad, pitch_rad;
     doughnut(color cl, double minor_r, double major_r, point c, double yaw = 0, double pitch = 0) :
-        center(c), minor_radius(minor_r), major_radius(major_r), yaw_rad(yaw), pitch_rad(pitch), epsilon(major_r * major_r - minor_r * minor_r){set_color(cl), set_class_name(), set_name("the default doughnut");}
+        center(c), minor_radius(minor_r), major_radius(major_r), /*yaw_rad(yaw), pitch_rad(pitch),*/ epsilon(major_r * major_r - minor_r * minor_r){set_color(cl), set_class_name(), set_name("the default doughnut"), set_yaw(yaw), set_pitch(pitch);}
     doughnut(color cl, double minor_r, double major_r, point c, const char* n, double yaw = 0, double pitch = 0) :
-        center(c), minor_radius(minor_r), major_radius(major_r), yaw_rad(yaw), pitch_rad(pitch), epsilon(major_r * major_r - minor_r * minor_r){set_color(cl), set_class_name(), set_name(n);}
+        center(c), minor_radius(minor_r), major_radius(major_r), /*yaw_rad(yaw), pitch_rad(pitch),*/ epsilon(major_r * major_r - minor_r * minor_r){set_color(cl), set_class_name(), set_name(n); set_yaw(yaw), set_pitch(pitch);}
 	virtual void set_color(const color c){clr = c;}
     virtual void set_name(const char* str){name = str;}
 	virtual void set_class_name(){class_name = "doughnut";}
+	virtual void on_hit(const std::function<void(const vector&)>& input_function){pressed = input_function;}
+	virtual void set_rotation(const double y, const double p, const double r){yaw_rad = y, pitch_rad = p, roll_rad = r;}
+	virtual void set_yaw(const double y){yaw_rad = y;}
+	virtual void set_pitch(const double p){pitch_rad = p;}
+	virtual void set_roll(const double r){roll_rad = r;}
 	/*std::pair<bool, double>*/ hit_val hit(vector u) const override{
         //u -= center; // todo: with a center other than the origin the donut does weird things
 		//already accounted for in formula but it still does weird things
+		#if 0
 		if(yaw_rad){
 			double cos_yar = cos(-yaw_rad), sin_yar = sin(-yaw_rad), sin_yar_x = sin_yar * u.x;
 			u.x = cos_yar * u.x + sin_yar * u.z;
@@ -681,6 +855,9 @@ struct doughnut : public object{
 			u.y = cos_par * u.y - sin_par * u.z;
 			u.z = sin_par_y + cos_par * u.z;
 		}
+		#endif
+		u.rotate_yaw(yaw_rad);
+		u.rotate_pitch(pitch_rad);
         double magnitude = sqrt(u.x * u.x + u.y * u.y + u.z * u.z);
         constexpr double scaler = 1;
         u.x /= (magnitude * scaler), u.y /= (magnitude * scaler), u.z /= (magnitude * scaler);
@@ -712,11 +889,19 @@ struct doughnut : public object{
         long double p = 8 * c - 3 * b * b;
         long double g = 64 * e - 16 * c * c + 16 * b * b * c - 16 * b * d - 3 * b * b * b * b;
         //todo: find the distance instead of just putting 100
-        if(discriminant < 0) return /*std::pair<bool, double>*/ hit_val(true, 100);
-        if(!discriminant) return /*std::pair<bool, double>*/ hit_val(!(!g && p > 0 && b * b * b + 8 * d - 4 * b * c), 100);
-        //if(discriminant > 0)
+        if(discriminant < 0){pressed(u); return /*std::pair<bool, double>*/ hit_val(true, 100);}
+        if(!discriminant){
+			bool hit_doughnut = !(!g && p > 0 && b * b * b + 8 * d - 4 * b * c);
+			if(hit_doughnut) pressed(u);
+			return hit_val(hit_doughnut, 100);
+			//return /*std::pair<bool, double>*/ hit_val(!(!g && p > 0 && b * b * b + 8 * d - 4 * b * c), 100);
+		}
+		//if(discriminant > 0)
         //return std::pair<bool, double>(!(p > 0 || g > 0), 100);
-        return /*std::pair<bool, double>*/ hit_val(p < 0 && g < 0, 100);
+		bool hit_doughnut = p < 0 && g < 0;
+       	if(hit_doughnut) pressed(u);
+		return hit_val(hit_doughnut, 100);
+		//return /*std::pair<bool, double>*/ hit_val(p < 0 && g < 0, 100);
     }
     bool is_in_frustum(const plane_array& plane) const override{
 		(void)plane; //for no warning
@@ -725,6 +910,7 @@ struct doughnut : public object{
 private:
     double epsilon;
 };
+#if 0
 #ifndef IMAGE
 sphere s(RGB(0, 0, 255), sqrt(100000), point(100, 41.5, 2000), "the big red sphere");
 #else
@@ -771,6 +957,8 @@ std::vector<object_pointer> world = {&s, &p
 #else
 , &d};
 #endif
+#endif
+std::vector<std::unique_ptr<object>> world;
 constexpr double convert_horizontal_fov_to_radians = //maybe just make it a bool and ternary the 0.0175 in calculating for z
 #ifdef in_radians
 //1 / 0.0175 //to cancel out the 0.0175
@@ -791,21 +979,39 @@ public:
 plane_setup_type plane_setup;
 std::function<void()> render =
 [](){
-	++f;
+	++framerate;
     //todo: use the gpu for calculations
 	std::vector<object_pointer> can_hit;
+	
 	static bool yaw_rotated = 0;
-	if(!yaw_rotated) s.image_yaw_rad += 0.0523599, yaw_rotated = abs(fmod(s.image_yaw_rad, 2 * M_PI)) <= 0.01;
-	else{
+	static double yaw_total = 0;
+	constexpr int object_num_lower_bound = 0, object_num_upper_bound = 1; //inclusive not exclusive
+	if(!yaw_rotated){
+		yaw_total += 0.0523599;
+		for(int object_num = object_num_lower_bound; object_num <= object_num_upper_bound; ++object_num)
+			world[object_num]->set_yaw(yaw_total);
+		yaw_rotated = abs(fmod(yaw_total, 2 * M_PI)) <= 0.01;
+	}else{
 		static bool pitch_rotated = 0;
-		if(!pitch_rotated) s.image_pitch_rad += 0.0523599, pitch_rotated = abs(fmod(s.image_pitch_rad, 2 * M_PI)) <= 0.01;
-		else yaw_rotated = 0, pitch_rotated = 0;
+		static double pitch_total = 0;
+		if(!pitch_rotated){
+			pitch_total += 0.0523599;
+			for(int object_num = object_num_lower_bound; object_num <= object_num_upper_bound; ++object_num)
+				world[object_num]->set_pitch(pitch_total);
+			pitch_rotated = abs(fmod(pitch_total, 2 * M_PI)) <= 0.01;
+		}
+		else yaw_rotated = 0, yaw_total = 0, pitch_rotated = 0, pitch_total = 0;
 	}
+	
 	plane_array plane;
     bool ypr;
     //for clicks and stuff
     plane_setup_type create_plane = [](std::vector<object_pointer>& can_hit, plane_array& plane, bool& ypr){
-        can_hit = world; // copy
+        //can_hit = world; // copy
+		//this is where segfault
+		if(can_hit.size() != world.size()) can_hit.resize(world.size());
+		for(int i = 0; i < (int)world.size(); ++i)
+			can_hit[i] = &*world[i];
         point bounding[4]{
             point(-width / 2.0, height / 2.0, z), //upper left
             point(width / 2.0, height / 2.0, z), //upper right
@@ -817,6 +1023,7 @@ std::function<void()> render =
     			   /*roll_angle_radians*/ abs_val(fmod(roll_angle_radians, 2 * M_PI)) > 0.01;
     	if(ypr){
     		for(point& i : bounding){
+				/*
     			if(yaw_angle_radians){
     				double cos_yar = cos(yaw_angle_radians), sin_yar = sin(yaw_angle_radians), sin_yar_x = sin_yar * i.x;
     				i.x = cos_yar * i.x + sin_yar * i.z;
@@ -834,10 +1041,15 @@ std::function<void()> render =
     				i.x = cos_rar * i.x - sin_rar * i.y;
     				i.y = sin_rar_x + cos_rar * i.y;
     			}
+				*/
+				i.rotate_yaw(yaw_angle_radians);
+				i.rotate_pitch(pitch_angle_radians);
+				i.rotate_roll(roll_angle_radians);
     		}
     	}
     	//todo: i guess change vector(0, -1, 0) to the correct vector for all pitch_angle_radians too (up and down)
     	// fabricate a back side
+		//todo: make the backside the computer screen
     	vector left_vector = bounding[0] - bounding[1], // vector pointing left from top right to top left
     		   projection = left_vector * (dot_product(bounding[0], left_vector) / dot_product(left_vector, left_vector)); // point on back side
     
@@ -847,7 +1059,7 @@ std::function<void()> render =
     		{bounding[1], bounding[0], point(0, 0, 0)}, //top
             {bounding[2], bounding[3], point(0, 0, 0)}, //bottom
     		{point(0, 0, 0), projection, point(0, -1, 0) /*fix*/}, //back test	
-    		//todo: add back plane and maybe front
+    		//todo: maybe add front plane
         };
     	#if __cplusplus >= 202002L
             std::erase_if(can_hit, [&plane](object_pointer i){return !i->is_in_frustum(plane);});
@@ -871,7 +1083,7 @@ std::function<void()> render =
 			for(int ipx = 0; ipx < width_px; row_vx += row_inc.x, row_vy += row_inc.y, row_vz += row_inc.z, ++ipx){
 				int index = prev + ipx;
 				vector v(row_vx, -row_vy, row_vz);
-				object_pointer smallest = can_hit[0];
+				object* smallest = can_hit[0];
 				/*std::pair<bool, double>*/ hit_val hit_b = smallest->hit(v);
 				bool hit_nothing = !hit_b.first;//, small_change = false;
 				//todo: likely and unlikely might be unnecessary
@@ -908,7 +1120,7 @@ std::function<void()> render =
 				int index = jpx * width_px + ipx;
 				vector v(-width / 2 + i, height / 2 - j, z);
 
-				object_pointer smallest = can_hit[0];
+				object* smallest = can_hit[0];
 				/*std::pair<bool, double>*/ hit_val hit_b = smallest->hit(v);
 				bool hit_nothing = !hit_b.first;//, small_change = false;
 				//todo: likely and unlikely might be unnecessary
@@ -1037,7 +1249,7 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
 			}
 			else
 				v = vector(-width / 2 + x * pixel_inc, height / 2 - y * pixel_inc, z);
-			object_pointer smallest = can_hit[0];
+			object* smallest = can_hit[0];
 			/*std::pair<bool, double>*/ hit_val hit_b = smallest->hit(v);
 			bool hit_nothing = !hit_b.first;//, small_change = false;
 			//todo: likely and unlikely might be unnecessary
@@ -1094,28 +1306,51 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
             DeleteDC(pdc);
             DeleteObject(bitmap);
             KillTimer(hwnd, 1);
-            exit(0);
-        default:
-            return DefWindowProc(hwnd, msg, w, l);
-    }
-    return 0;
+			exit(0);
+		default:
+			return DefWindowProc(hwnd, msg, w, l);
+	}
+	return 0;
 }
 int main(){
-    //std::ios_base::sync_with_stdio(false);
-    //std::cout.tie(0);
-    //std::cin.tie(0);
-    _beginthread(fps, 0, 0);
-    char name[] = "omg";
-    WNDCLASS wc{};
-    wc.lpszClassName = name;
-    wc.hCursor = LoadCursor(0, IDC_ARROW);
-    wc.lpfnWndProc = WindowProcessMessages;
-    RegisterClass(&wc);
-    int a = width_px + 16, b = height_px + 39;
-    CreateWindow(name, name, WS_OVERLAPPEDWINDOW | WS_CAPTION | WS_SYSMENU | WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT, a, b, 0, 0, 0, 0);
-    MSG msg{};
-    while(GetMessage(&msg, 0, 0, 0)){
-        TranslateMessage(&msg);
-        DispatchMessage(&msg);
-    }
+	//std::ios_base::sync_with_stdio(false);
+	//std::cout.tie(0);
+	//std::cin.tie(0);
+	#ifdef IMAGE
+	std::unique_ptr<sphere> s = std::make_unique<sphere>(no_color, sqrt(100000), point(0, 50, 2000), "the big blue earth", read_rgb_image("images/earth.bmp"));
+	#else
+	std::unique_ptr<sphere> s = std::make_unique<sphere>(RGB(0, 0, 255), sqrt(100000), point(0, 50, 2000), "the red sphere");
+	#endif
+	//s->on_hit([](const vector& v){
+	//	std::cout << "hi\n";
+	//});
+	#ifndef NO_DOUGHNUT
+	std::unique_ptr<doughnut> d = std::make_unique<doughnut>(RGB(255, 0, 255), 90, 1500, point(0, 0, 0), "the laggy doughnut", 1.57, 1);
+	#endif
+	//point p1(-250, -300, 2400), p2(250, 200, 1500), p3(350, -100, 1000);
+	point p1(-350, -165, 2400), p2(350, -165, 2400), p3(0, /*-1000*/-1400, 2400);
+	#ifdef IMAGE
+	std::unique_ptr<polygon> p = std::make_unique<polygon>(no_color, "the funny triangle", read_rgb_image("images/cone.bmp"), p1, p2, p3);
+	#else
+	std::unique_ptr<polygon> p = std::make_unique<polygon>(RGB(0, 255, 0), "the funny triangle", p1, p2, p3);
+	#endif
+	world.emplace_back(std::move(s));
+	#ifndef NO_DOUGHNUT
+	world.emplace_back(std::move(d));
+	#endif
+	world.emplace_back(std::move(p));
+	_beginthread(fps, 0, 0);
+	char name[] = "omg";
+	WNDCLASS wc{};
+	wc.lpszClassName = name;
+	wc.hCursor = LoadCursor(0, IDC_ARROW);
+	wc.lpfnWndProc = WindowProcessMessages;
+	RegisterClass(&wc);
+	int a = width_px + 16, b = height_px + 39;
+	CreateWindow(name, name, WS_OVERLAPPEDWINDOW | WS_CAPTION | WS_SYSMENU | WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT, a, b, 0, 0, 0, 0);
+	MSG msg{};
+	while(GetMessage(&msg, 0, 0, 0)){
+	    TranslateMessage(&msg);
+	    DispatchMessage(&msg);
+	}
 }
