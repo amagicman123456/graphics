@@ -22,6 +22,7 @@
 #endif
 #ifdef IMAGE
 #include <fstream>
+#include <memory>
 struct image{
 	image() : width(0), row_bytes(0), height(0), data(nullptr){}
 	image(image&& other){
@@ -453,7 +454,8 @@ struct sphere : public object{
 struct polygon : public object{
     std::vector<point> points/*{}*/;
 	#ifdef IMAGE
-    polygon(color cl, const char* n, image&& i, auto... l) try : points{(point(l))...}{
+    //polygon(color cl, const char* n, image&& i, auto... l) try : points{(point(l))...}{
+	template<typename ...T> polygon(color cl, const char* n, image&& i, T... l) try : points{(point(l))...}{
 		set_color(cl);
 		set_class_name();
 		set_name(n);
@@ -461,8 +463,9 @@ struct polygon : public object{
 		if(sizeof...(l) < 3) throw;
 	}catch(...){std::cout << "error: number of points to polygon's constructor must be greater than two\n";}
 	#endif
-	polygon(color cl, const char* n, auto... l) try /*: clr(cl)*/ : points{(point(l))...}{
-        set_color(cl);
+	//polygon(color cl, const char* n, auto... l) try /*: clr(cl)*/ : points{(point(l))...}{
+    template<typename ...T> polygon(color cl, const char* n, T... l) try /*: clr(cl)*/ : points{(point(l))...}{
+		set_color(cl);
 		set_class_name();
 		set_name(n);
 		#ifdef IMAGE
@@ -473,7 +476,8 @@ struct polygon : public object{
         //a = points[1] - points[0], b = points[2] - points[0], c = cross_product(a, b);
         //k = c.x * points[0].x + c.y * points[1].y + c.z * points[2].z;
     }catch(...){std::cout << "error: number of points to polygon's constructor must be greater than two\n";}
-	polygon(color cl, auto... l) try /*: clr(cl)*/ : points{(point(l))...}{
+	//polygon(color cl, auto... l) try /*: clr(cl)*/ : points{(point(l))...}{
+	template<typename ...T> polygon(color cl, T... l) try /*: clr(cl)*/ : points{(point(l))...}{
         set_color(cl);
 		set_class_name();
 		set_name("the default polygon");
@@ -980,7 +984,7 @@ plane_setup_type plane_setup;
 std::function<void()> render =
 [](){
 	++framerate;
-    //todo: use the gpu for calculations
+	//todo: use the gpu for calculations
 	std::vector<object_pointer> can_hit;
 	
 	static bool yaw_rotated = 0;
@@ -990,7 +994,7 @@ std::function<void()> render =
 		yaw_total += 0.0523599;
 		for(int object_num = object_num_lower_bound; object_num <= object_num_upper_bound; ++object_num)
 			world[object_num]->set_yaw(yaw_total);
-		yaw_rotated = abs(fmod(yaw_total, 2 * M_PI)) <= 0.01;
+		yaw_rotated = abs_val(fmod(yaw_total, 2 * M_PI)) <= 0.01;
 	}else{
 		static bool pitch_rotated = 0;
 		static double pitch_total = 0;
@@ -998,7 +1002,7 @@ std::function<void()> render =
 			pitch_total += 0.0523599;
 			for(int object_num = object_num_lower_bound; object_num <= object_num_upper_bound; ++object_num)
 				world[object_num]->set_pitch(pitch_total);
-			pitch_rotated = abs(fmod(pitch_total, 2 * M_PI)) <= 0.01;
+			pitch_rotated = abs_val(fmod(pitch_total, 2 * M_PI)) <= 0.01;
 		}
 		else yaw_rotated = 0, yaw_total = 0, pitch_rotated = 0, pitch_total = 0;
 	}
@@ -1057,7 +1061,8 @@ std::function<void()> render =
             {bounding[0], bounding[2], point(0, 0, 0)}, //left
     		{bounding[3], bounding[1], point(0, 0, 0)}, //right
     		{bounding[1], bounding[0], point(0, 0, 0)}, //top
-            {bounding[2], bounding[3], point(0, 0, 0)}, //bottom
+            //{bounding[2], bounding[3], point(0, 0, 0)}, //bottom
+			{bounding[3], bounding[2], bounding[3] * 2}, //bottom
     		{point(0, 0, 0), projection, point(0, -1, 0) /*fix*/}, //back test	
     		//todo: maybe add front plane
         };
@@ -1153,7 +1158,7 @@ std::function<void()> render =
 }
 , resize =
 [](){
-    z = width / (2 * tan(horizontal_fov * convert_horizontal_fov_to_radians /* * 0.0175*/ / 2));
+    //z = width / (2 * tan(horizontal_fov * convert_horizontal_fov_to_radians /* * 0.0175*/ / 2));
     vertical_fov = atan(tan(height_px / 2.0) * height_px / (double)width_px);
     height = height_px / (double)width_px;
     pixel_inc = width / width_px;
@@ -1173,7 +1178,7 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
     static HBITMAP bitmap;
     switch(msg){
         case WM_CREATE:{
-            SetTimer(hwnd, 1, 1, 0);
+            //SetTimer(hwnd, 1, 1, 0);
             HDC hdc;
             BITMAPINFO bitmapinfo{};
             hdc = CreateCompatibleDC(0);
@@ -1288,10 +1293,12 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
 			}
 			break;
 		}
+		/*
 		case WM_TIMER:
             InvalidateRgn(hwnd, 0, 0);
             UpdateWindow(hwnd);
             break;
+		*/
         case WM_PAINT:{
             //tick_count = GetTickCount();
             PAINTSTRUCT ps;
@@ -1299,13 +1306,14 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
             render();
             BitBlt(h, 0, 0, width_px, height_px, pdc, 0, 0, SRCCOPY);
             EndPaint(hwnd, &ps);
+			InvalidateRgn(hwnd, 0, 0);
             break;
         }
         case WM_DESTROY:
             SelectObject(pdc, old);
             DeleteDC(pdc);
             DeleteObject(bitmap);
-            KillTimer(hwnd, 1);
+            //KillTimer(hwnd, 1);
 			exit(0);
 		default:
 			return DefWindowProc(hwnd, msg, w, l);
