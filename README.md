@@ -17,7 +17,7 @@ btw outdated/yes_cursed.exe is way too cursed
 build with
 
 ```
-x86_64-w64-mingw32-g++ yes.cpp [options] -static -lgdi32 -fconcepts-ts -Ofast -o yes
+x86_64-w64-mingw32-g++ yes.cpp [options] -static -lgdi32 `# [no longer needed: -fconcepts-ts]` -Ofast -o yes
 ```
 
 options:
