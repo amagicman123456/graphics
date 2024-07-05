@@ -143,8 +143,21 @@ inline double abs_val(double a){
 }
 struct point{
     double x, y, z;
+	bool is_normalized = 0;
     point() : x(0), y(0), z(0){}
     point(double e, double f, double g) : x(e), y(f), z(g){}
+	double magnitude_squared() const{
+		return x * x + y * y + z * z;
+	}
+	double magnitude() const{
+		return sqrt(this->magnitude_squared());
+	}
+	void set_normalized(bool a){is_normalized = a;}
+	void normalize(){
+		set_normalized(true);
+		const double magnitude = this->magnitude();
+		this->x /= magnitude, this->y /= magnitude, this->z /= magnitude;
+	}
 	inline point operator-() const{
 		return point(-x, -y, -z);
 	}
@@ -169,7 +182,24 @@ struct point{
 	inline point operator/(double i) const{
 		return point(x / i, y / i, z / i);
 	}
+	void rotate(double y, double p, double r){
+		//todo: cache previous values of sin(angle) and cos(angle)
+		double sin_yar = sin(y), cos_yar = cos(y),
+			   sin_par = sin(p), cos_par = cos(p),
+			   sin_rar = sin(r), cos_rar = cos(r);
+		const double x_copy = this->x, y_copy = this->y;
+		this->x = (cos_yar * cos_rar + sin_yar * sin_par * sin_rar) * this->x
+				+ (sin_yar * sin_par * cos_rar - cos_yar * sin_rar) * this->y
+				+ (sin_yar * cos_par) * this->z;
+		this->y = (cos_par * sin_rar) * x_copy
+				+ (cos_par * cos_rar) * this->y
+				- sin_par * this->z;
+		this->z = (cos_yar * sin_par * sin_rar - sin_yar * cos_rar) * x_copy
+				+ (sin_yar * sin_rar + cos_yar * sin_par * cos_rar) * y_copy
+				+ (cos_yar * cos_par) * this->z;
+	}
 	void rotate_yaw(double y){
+		//todo: cache previous values of sin(angle) and cos(angle)
 		if(y){
 			double cos_yar = cos(y), sin_yar = sin(y), sin_yar_x = sin_yar * this->x;
 			this->x = cos_yar * this->x + sin_yar * this->z;
@@ -177,6 +207,7 @@ struct point{
 		}
 	}
 	void rotate_pitch(double p){
+		//todo: cache previous values of sin(angle) and cos(angle)
 		if(p){
 			//todo: check if pitch is actually correct (make it so positive always migrates to top instead of going in circles)
 			double cos_par = cos(p), sin_par = sin(p), sin_par_y = sin_par * this->y;
@@ -185,6 +216,7 @@ struct point{
 		}
 	}
 	void rotate_roll(double r){
+		//todo: cache previous values of sin(angle) and cos(angle)
 		if(r){
 			//todo: check if roll is actually correct
 			double cos_rar = cos(r), sin_rar = sin(r), sin_rar_x = sin_rar * this->x;
@@ -250,7 +282,7 @@ struct object{
 	#endif
 	virtual void set_name(const char* str){name = str;}
 	const char *class_name, *name;
-	double yaw_rad, pitch_rad, roll_rad;
+	double yaw_rad = 0, pitch_rad = 0, roll_rad = 0;
 	std::function<void(const vector&)> pressed = [](const vector&){};
 	virtual void on_hit(const std::function<void(const vector&)>& input_function){pressed = input_function;}
 	virtual void set_rotation(const double y, const double p, const double r){yaw_rad = y, pitch_rad = p, roll_rad = r;}
@@ -274,7 +306,7 @@ struct sphere : public object{
 	//#endif
     sphere(color cl, double r, point c, const char* n = "the default sphere"
 	#ifdef IMAGE
-	, image&& i = read_rgb_image(""), double yr = 0, double pr  = 0, double rr = 0
+	, image&& i = read_rgb_image(""), double yr = 0, double pr = 0, double rr = 0
 	#endif 
 	) : radius(r), center(c)
 	//#ifdef IMAGE
@@ -300,7 +332,7 @@ struct sphere : public object{
 	virtual void set_roll(const double r){roll_rad = r;}
 	/*std::pair<bool, double>*/ hit_val hit(vector u) const override{
         //todo: do the same thing for u.x and u.y
-		if((u.z > 0 && center.z < radius) || (u.z < 0 && center.z > radius)) return /*std::pair<bool, double>*/ hit_val(false, 0);
+		//if((u.z > 0 && center.z < radius) || (u.z < 0 && center.z > radius)) return /*std::pair<bool, double>*/ hit_val(false, 0);
 		/*	
         double magnitude_squared = u.x * u.x + u.y * u.y + u.z * u.z;
         //double dot = dot_product(u.x, u.y, u.z, center.x, center.y, center.z);
@@ -315,8 +347,11 @@ struct sphere : public object{
 		*/
 		//todo: its the correct difference but normalizing requires a sqrt
 		#if 1
-		double magnitude = sqrt(u.x * u.x + u.y * u.y + u.z * u.z);
-		u.x /= magnitude, u.y /= magnitude, u.z /= magnitude;
+		if(!u.is_normalized){
+			//double magnitude = sqrt(u.x * u.x + u.y * u.y + u.z * u.z);
+			double magnitude = u.magnitude();
+			u.x /= magnitude, u.y /= magnitude, u.z /= magnitude;
+		}
 		double dot = dot_product(u, -center);
 		double determinant = dot * dot - (center.x * center.x + center.y * center.y + center.z * center.z - radius * radius);
 		#else
@@ -334,9 +369,10 @@ struct sphere : public object{
 		#else
 		if(!img.width || !img.height) return hit_val(true, distance);
 		vector hit_spot = (u * distance) - center;
-		hit_spot.rotate_yaw(yaw_rad);
-		hit_spot.rotate_pitch(pitch_rad);
-		hit_spot.rotate_roll(roll_rad);
+		//hit_spot.rotate_yaw(yaw_rad);
+		//hit_spot.rotate_pitch(pitch_rad);
+		//hit_spot.rotate_roll(roll_rad);
+		hit_spot.rotate(yaw_rad, pitch_rad, roll_rad);
 		#if 0
 		if(/*image_*/yaw_rad){
 			double cos_yar = cos(/*image_*/yaw_rad), sin_yar = sin(/*image_*/yaw_rad), sin_yar_x = sin_yar * hit_spot.x;
@@ -356,7 +392,8 @@ struct sphere : public object{
 			hit_spot.y = sin_rar_x + cos_rar * hit_spot.y;
 		}
 		#endif
-		double hit_spot_magnitude = sqrt(hit_spot.x * hit_spot.x + hit_spot.y * hit_spot.y + hit_spot.z * hit_spot.z);
+		//double hit_spot_magnitude = sqrt(hit_spot.x * hit_spot.x + hit_spot.y * hit_spot.y + hit_spot.z * hit_spot.z);
+		double hit_spot_magnitude = hit_spot.magnitude();
 		hit_spot.x /= hit_spot_magnitude, hit_spot.y /= hit_spot_magnitude, hit_spot.z /= hit_spot_magnitude;
 		{
 			double u = 0.5 + atan2(hit_spot.z, hit_spot.x) / (2 * M_PI);
@@ -525,7 +562,8 @@ struct polygon : public object{
 		yaw_rad = y, pitch_rad = p, roll_rad = r;
 		for(point& i : points){
 			i -= centroid;
-			i.rotate_yaw(y), i.rotate_pitch(p), i.rotate_roll(r);
+			//i.rotate_yaw(y), i.rotate_pitch(p), i.rotate_roll(r);
+			i.rotate(y, p, r);
 			i += centroid;
 		}
 	}
@@ -564,11 +602,16 @@ struct polygon : public object{
         p.z = greatest;
     };
     /*std::pair<bool, double>*/ hit_val hit(vector u) const override{
-		
 		static double yar_snap = yaw_angle_radians, par_snap = pitch_angle_radians, rar_snap = roll_angle_radians;
 		static double y_snap = yaw_rad, p_snap = pitch_rad, r_snap = roll_rad;
 		static std::vector<point> vertices;
+		#if __cplusplus >= 201703L
+		[[maybe_unused]]
+		#endif
 		static bool is_triangle;
+		#if __cplusplus < 201703L && !(defined(IMAGE) || defined(tri_specialization))
+		(void)is_triangle;
+		#endif
 		static int call_num = 0, calls_per_frame = width_px * height_px;
 		static vector a, b, c;
 		static double k;
@@ -600,10 +643,12 @@ struct polygon : public object{
 		#endif
 
 		//todo: do the same thing for u.x and u.y
+		#if 0
 		for(const point& i : points) //maybe change to vertices
             if((u.z < 0 && i.z < 0) || (u.z > 0 && i.z > 0)) goto polygon_start;
        	return /*std::pair<bool, double>*/ hit_val(false, 0);
         polygon_start:
+		#endif
 		#if 0
 		static double yar_snap = yaw_angle_radians, par_snap = pitch_angle_radians, rar_snap = roll_angle_radians;
        	static double y_snap = yaw_rad, p_snap = pitch_rad, r_snap = roll_rad;
@@ -639,6 +684,7 @@ struct polygon : public object{
 		(void)once; //for no warning
 		#endif
 		#endif
+		//may not be accurate for non-unit vectors, do something if its not normalized ig
         double e = u.x * c.x + u.y * c.y + u.z * c.z;
         double t = k / e;
         if(likely(!e || (u.z * t < 0))) return /*std::pair<bool, double>*/ hit_val(false, 0);
@@ -862,10 +908,12 @@ struct doughnut : public object{
 		#endif
 		u.rotate_yaw(yaw_rad);
 		u.rotate_pitch(pitch_rad);
-        double magnitude = sqrt(u.x * u.x + u.y * u.y + u.z * u.z);
-        constexpr double scaler = 1;
-        u.x /= (magnitude * scaler), u.y /= (magnitude * scaler), u.z /= (magnitude * scaler);
-        long double a, b, c, d, e;
+		double magnitude;
+		if(!u.is_normalized) magnitude = sqrt(u.x * u.x + u.y * u.y + u.z * u.z);
+		else magnitude = 1;
+		constexpr double scaler = 1;
+		u.x /= (magnitude * scaler), u.y /= (magnitude * scaler), u.z /= (magnitude * scaler);
+		long double a, b, c, d, e;
         {
             long double _a = -center.x, _b = u.x, _c = -center.y, _d = u.y, _e = -center.z, _f = u.z;
 
@@ -1046,9 +1094,10 @@ std::function<void()> render =
     				i.y = sin_rar_x + cos_rar * i.y;
     			}
 				*/
-				i.rotate_yaw(yaw_angle_radians);
-				i.rotate_pitch(pitch_angle_radians);
-				i.rotate_roll(roll_angle_radians);
+				//i.rotate_yaw(yaw_angle_radians);
+				//i.rotate_pitch(pitch_angle_radians);
+				//i.rotate_roll(roll_angle_radians);
+				i.rotate(yaw_angle_radians, pitch_angle_radians, roll_angle_radians);
     		}
     	}
     	//todo: i guess change vector(0, -1, 0) to the correct vector for all pitch_angle_radians too (up and down)
@@ -1080,6 +1129,7 @@ std::function<void()> render =
 		return;
 	}
 	if(ypr){
+		//todo: start with a unit vector, and rotate it by the angle amount in either radians or degrees (fov / width_px) or something every time you move one pixel right
 		vector start = plane[0][0]; //start at top left
 		vector row_inc = (plane[2][0] - plane[2][1]) / width_px, column_dec = (plane[0][0] - plane[0][1]) / height_px;
 		for(int jpx = height_px - 1; jpx >= 0; start -= column_dec, --jpx){
@@ -1088,6 +1138,7 @@ std::function<void()> render =
 			for(int ipx = 0; ipx < width_px; row_vx += row_inc.x, row_vy += row_inc.y, row_vz += row_inc.z, ++ipx){
 				int index = prev + ipx;
 				vector v(row_vx, -row_vy, row_vz);
+				v.normalize();
 				object* smallest = can_hit[0];
 				/*std::pair<bool, double>*/ hit_val hit_b = smallest->hit(v);
 				bool hit_nothing = !hit_b.first;//, small_change = false;
@@ -1118,13 +1169,14 @@ std::function<void()> render =
 			}
 		}
 	}else{
+		//todo: start with a unit vector, and rotate it by the angle amount in either radians or degrees (fov / width_px) or something every time you move one pixel right
 		int ipx, jpx = height_px - 1;
 		for(double j = height/*- 1*/; j >= 0 && jpx >= 0; /*--j*/j -= pixel_inc, --jpx){
 			ipx = 0;
 			for(double i = 0; i < width /* 1 */ && ipx < width_px; /*++i*/i += pixel_inc, ++ipx){
 				int index = jpx * width_px + ipx;
 				vector v(-width / 2 + i, height / 2 - j, z);
-
+				v.normalize();
 				object* smallest = can_hit[0];
 				/*std::pair<bool, double>*/ hit_val hit_b = smallest->hit(v);
 				bool hit_nothing = !hit_b.first;//, small_change = false;
@@ -1151,7 +1203,6 @@ std::function<void()> render =
 				#else
 					framebuf[index] = (hit_b.third != no_color ? hit_b.third : smallest->clr);
 				#endif
-
 			}
 		}
 	}
