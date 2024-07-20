@@ -301,12 +301,14 @@ struct object{
 };
 //typedef object* object_pointer; //maybe change it to unique_ptr or shared_ptr idk
 typedef object* object_pointer;
+/*
 bool on_plane_normal_side(const plane& bound, const point& p){
 	vector a = bound[1] - bound[0], b = bound[2] - bound[0], cross = cross_product(a, b);
 	double A = -cross.x * bound[0].x, B = -cross.y * bound[0].y, C = -cross.z * bound[0].z;
 	//todo: idk if this is correct
 	return A * p.x + B * p.y + C * p.z <= 0;
 }
+*/
 double plane_distance(const plane& bound, const point& p){ 
 	vector a = bound[1] - bound[0], b = bound[2] - bound[0], cross = cross_product(a, b);
 	double cross_mag = cross.magnitude();//sqrt(cross.x * cross.x + cross.y * cross.y + cross.z * cross.z);
@@ -893,17 +895,17 @@ struct polygon : public object{
 			if(this_point){std::cout << "polygon in frustum real\n"; return true;}
 			*/
 			//assuming again
-			//double left_distance = plane_distance(plane[0], i), right_distance = plane_distance(plane[1], i),
-			//	   top_distance = plane_distance(plane[2], i), bottom_distance = plane_distance(plane[3], i);
+			double left_distance = plane_distance(plane[0], i), right_distance = plane_distance(plane[1], i),
+				   top_distance = plane_distance(plane[2], i), bottom_distance = plane_distance(plane[3], i);
         	//std::cout << "point " << i.x << ' ' << i.y << ' ' << i.z << 
 			//			 " distances: " << left_distance << ' ' << right_distance << ' ' << top_distance << ' ' << bottom_distance << '\n';
-			//if(left_distance > 0 && right_distance > 0 && top_distance > 0 && bottom_distance > 0) return true;
-			bool left_side = on_plane_normal_side(plane[0], i), right_side = on_plane_normal_side(plane[1], i), top_side = on_plane_normal_side(plane[2], i), bottom_side = on_plane_normal_side(plane[3], i);
+			if(left_distance > 0 && right_distance > 0 && top_distance > 0 && bottom_distance > 0) return true;
+			//bool left_side = on_plane_normal_side(plane[0], i), right_side = on_plane_normal_side(plane[1], i), top_side = on_plane_normal_side(plane[2], i), bottom_side = on_plane_normal_side(plane[3], i);
 			//if(on_plane_normal_side(plane[0], i) && on_plane_normal_side(plane[1], i) && on_plane_normal_side(plane[2], i) && on_plane_normal_side(plane[3], i)) return true;
-			if(left_side && right_side && top_side && bottom_side) return true;
-			std::cout << "point " << i.x << ' ' << i.y << ' ' << i.z << '\n' <<
-						 "pitch angle: " << pitch_angle_radians << '\n' <<
-						 "on_side: " << left_side << ' ' << right_side << ' ' << top_side << ' ' << bottom_side << '\n';
+			//if(left_side && right_side && top_side && bottom_side) return true;
+			//std::cout << "point " << i.x << ' ' << i.y << ' ' << i.z << '\n' <<
+			//			 "pitch angle: " << pitch_angle_radians << '\n' <<
+			//			 "on_side: " << left_side << ' ' << right_side << ' ' << top_side << ' ' << bottom_side << '\n';
 			//std::cout << "point " << i.x << ' ' << i.y << ' ' << i.z << '\n'; //<<
 			//			 " distances: " << left_distance << ' ' << right_distance << ' ' << top_distance << ' ' << bottom_distance << '\n';
 		}
@@ -1088,8 +1090,11 @@ public:
 };
 plane_setup_type plane_setup;
 //todo: make an option where the edges of shapes are not smoothened, if a pixel hit go back and see where it hit
-#if defined(SMOOTHEN) && !defined(SMOOTHEN_AMOUNT)
-	#define SMOOTHEN_AMOUNT 2
+#ifdef SMOOTHEN
+	#ifndef SMOOTHEN_AMOUNT
+		#define SMOOTHEN_AMOUNT 2
+	#endif
+	static_assert(SMOOTHEN_AMOUNT > 0, "smoothen amount must be greater than 0");
 #endif
 std::function<void()> render =
 [](){
@@ -1201,15 +1206,22 @@ std::function<void()> render =
 		for(int jpx = height_px - 1; jpx >= 0; start -= column_dec, --jpx){
 			double row_vx = start.x, row_vy = start.y, row_vz = start.z;
 			int prev = jpx * width_px;
-			for(int ipx = 0; ipx < width_px; 
+			for(int ipx = 0; 
 			#ifndef SMOOTHEN
+				ipx < width_px;
 				row_vx += row_inc.x, row_vy += row_inc.y, row_vz += row_inc.z, 
 				++ipx
 			#else
+				ipx != width_px + SMOOTHEN_AMOUNT - 1;
 				row_vx += SMOOTHEN_AMOUNT * row_inc.x, row_vy += SMOOTHEN_AMOUNT * row_inc.y, row_vz += SMOOTHEN_AMOUNT * row_inc.z,
 				ipx += SMOOTHEN_AMOUNT
 			#endif
 				){
+				#ifdef SMOOTHEN
+					int prev_diff;
+					if(ipx >= width_px) prev_diff = (width_px - 1) - (ipx - SMOOTHEN_AMOUNT), ipx = width_px - 1;
+					else prev_diff = 0;
+				#endif
 				int index = prev + ipx;
 				vector v(row_vx, -row_vy, row_vz);
 				//if(index % 1000) std::cout << v.x << ' ' << v.y << ' ' << v.z << '\n';
@@ -1241,15 +1253,16 @@ std::function<void()> render =
 				#else
 					framebuf[index] = (hit_b.third != no_color ? hit_b.third : smallest->clr);
 				#endif
+
 				#ifdef SMOOTHEN
-					if(ipx > SMOOTHEN_AMOUNT){
+					if(ipx >= SMOOTHEN_AMOUNT){
 						//todo: instead, square values before adding them, divide by 2, then take the square root, ie. avg of red = sqrt((red1^2 + red2^2) / 2)
 						color average = RGB(
 							(GetRValue(framebuf[index]) + GetRValue(framebuf[index - SMOOTHEN_AMOUNT])) / 2,
 							(GetGValue(framebuf[index]) + GetGValue(framebuf[index - SMOOTHEN_AMOUNT])) / 2,
 							(GetBValue(framebuf[index]) + GetBValue(framebuf[index - SMOOTHEN_AMOUNT])) / 2
 						);
-						for(int i = 1; i < SMOOTHEN_AMOUNT; ++i) framebuf[index - i] = average;
+						for(int i = 1, stop = prev_diff ? prev_diff : SMOOTHEN_AMOUNT; i < stop; ++i) framebuf[index - i] = average;
 					}
 				#endif
 			}
@@ -1259,13 +1272,20 @@ std::function<void()> render =
 		int ipx, jpx = height_px - 1;
 		for(double j = height/*- 1*/; j >= 0 && jpx >= 0; /*--j*/j -= pixel_inc, --jpx){
 			ipx = 0;
-			for(double i = 0; i < width /* 1 */ && ipx < width_px; /*++i*/
+			for(double i = 0; /*i < width*/ /* 1 */ /*&&*/ /*ipx < width_px;*/ /*++i*/
 				#ifndef SMOOTHEN
+				ipx < width_px;
 				i += pixel_inc, ++ipx
 				#else
+				ipx != width_px + SMOOTHEN_AMOUNT - 1;
 				i += SMOOTHEN_AMOUNT * pixel_inc, ipx += SMOOTHEN_AMOUNT
 				#endif
 				){
+				#ifdef SMOOTHEN
+					int prev_diff;
+					if(ipx >= width_px) prev_diff = (width_px - 1) - (ipx - SMOOTHEN_AMOUNT), ipx = width_px - 1;
+					else prev_diff = 0;
+				#endif
 				int index = jpx * width_px + ipx;
 				vector v(-width / 2 + i, height / 2 - j, z);
 				v.normalize();
@@ -1295,15 +1315,16 @@ std::function<void()> render =
 				#else
 					framebuf[index] = (hit_b.third != no_color ? hit_b.third : smallest->clr);
 				#endif
+				
 				#ifdef SMOOTHEN
-					if(ipx > SMOOTHEN_AMOUNT){
+					if(ipx >= SMOOTHEN_AMOUNT){
 						//todo: instead, square values before adding them, divide by 2, then take the square root, ie. avg of red = sqrt((red1^2 + red2^2) / 2)
 						color average = RGB(
 							(GetRValue(framebuf[index]) + GetRValue(framebuf[index - SMOOTHEN_AMOUNT])) / 2,
 							(GetGValue(framebuf[index]) + GetGValue(framebuf[index - SMOOTHEN_AMOUNT])) / 2,
 							(GetBValue(framebuf[index]) + GetBValue(framebuf[index - SMOOTHEN_AMOUNT])) / 2
 						);
-						for(int i = 1; i < SMOOTHEN_AMOUNT; ++i) framebuf[index - i] = average;
+						for(int i = 1, stop = prev_diff ? prev_diff : SMOOTHEN_AMOUNT; i < stop; ++i) framebuf[index - i] = average;
 					}
 				#endif
 
