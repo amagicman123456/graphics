@@ -23,19 +23,20 @@
 #ifdef IMAGE
 #include <fstream>
 #include <memory>
+typedef std::/*unique*/shared_ptr<uint8_t[]> data_ptr;
 struct image{
 	image() : width(0), row_bytes(0), height(0), data(nullptr){}
-	image(image&& other){
-		width = other.width;
-		row_bytes = other.row_bytes;
-		height = other.height;
-		data = std::move(other.data);
-	}
-	image(uint32_t a, int32_t b, std::unique_ptr<uint8_t[]>&& c) : width(a), row_bytes((3 * a + 3) & -4) /* round up to multiple of 4 */, height(b), data(std::move(c)){}
+	//image(image&& other) : width(other.width), row_bytes(other.row_bytes), height(other.height), data(std::move(other.data)){
+		//width = other.width;
+		//row_bytes = other.row_bytes;
+		//height = other.height;
+		//data = std::move(other.data);
+	//}
+	image(uint32_t a, int32_t b, /*std::unique_ptr<uint8_t[]>*/data_ptr/*&&*/ c) : width(a), row_bytes((3 * a + 3) & -4) /* round up to multiple of 4 */, height(b), data(/*std::move(*/c/*)*/){}
 	uint32_t width;
 	uint32_t row_bytes;
 	int32_t height;
-	std::unique_ptr<uint8_t[]> data;
+	/*std::unique_ptr<uint8_t[]>*/data_ptr data;
 	uint32_t color_at(uint32_t x, uint32_t y) const{
 		uint32_t index = /*(height - y - 1)*/y * row_bytes + 3 * x;
 		//return (uint32_t)data[index] << 24 |
@@ -45,13 +46,13 @@ struct image{
 			   (uint32_t)data[index + 1] << 8 |
 			   (uint32_t)data[index + 2];
 	}
-	image& operator=(image&& other){
-		width = other.width;
-		row_bytes = other.row_bytes;
-		height = other.height;
-		data = std::move(other.data);
-		return *this;
-	}
+	//image& operator=(image&& other){
+		//width = other.width;
+		//row_bytes = other.row_bytes;
+		//height = other.height;
+		//data = std::move(other.data);
+		//return *this;
+	//}
 	//make iterators if wanted
 };
 /*
@@ -92,14 +93,14 @@ struct image{
 */
 image read_rgb_image(const char* const path){
 	std::ifstream bitmap{path, std::ios::in | std::ios::binary};
-	if(!bitmap) return image(0, 0, std::unique_ptr<uint8_t[]>(nullptr));
+	if(!bitmap) return image(0, 0, /*std::unique_ptr<uint8_t[]>*/data_ptr(nullptr));
 	char buf[26];
 	bitmap.read(buf, 26);
 	uint32_t width = *reinterpret_cast<uint32_t*>(buf + 18);
 	int32_t height = *reinterpret_cast<int32_t*>(buf + 22);
 	bool sign = height > 0;
 	uint32_t size = 3 * width * (sign ? height : -height);
-	std::unique_ptr<uint8_t[]> data = std::make_unique<uint8_t[]>(size);
+	/*std::unique_ptr<uint8_t[]>*/data_ptr data = std::make_unique<uint8_t[]>(size);
 	bitmap.seekg(*reinterpret_cast<uint32_t*>(buf + 10), std::ios_base::beg);
 	bitmap.read(reinterpret_cast<char*>(data.get()), size);
 	if(sign)
@@ -216,7 +217,7 @@ struct point{
 	void rotate_pitch(const double p){
 		//todo: cache previous values of sin(angle) and cos(angle)
 		if(p){
-			//todo: check if pitch is actually correct (make it so positive always migrates to top instead of going in circles)
+			//todo: check if pitch is actually correct
 			double cos_par = cos(p), sin_par = sin(p), sin_par_y = sin_par * this->y;
 			this->y = cos_par * this->y - sin_par * this->z;
 			this->z = sin_par_y + cos_par * this->z;
@@ -285,7 +286,7 @@ struct object{
     virtual void set_color(const color c){clr = c;}
     color clr;
 	#ifdef IMAGE
-	virtual void set_image(image&& i){img = std::move(i);}
+	virtual void set_image(image/*&&*/ i){img = /*std::move(*/i/*)*/;}
 	image img;
 	#endif
 	virtual void set_name(const char* str){name = str;}
@@ -294,10 +295,17 @@ struct object{
 	//todo: pass in a struct with more details to pressed() like color
 	std::function<void(const vector&, const hit_val&)> pressed = [](const vector&, const hit_val&){};
 	virtual void on_hit(const std::function<void(const vector&, const hit_val&)>& input_function){pressed = input_function;}
+	virtual void translate(const double x, const double y, const double z) = 0;
 	virtual void set_rotation(const double y, const double p, const double r){yaw_rad = y, pitch_rad = p, roll_rad = r;}
 	virtual void set_yaw(const double y){yaw_rad = y;}
 	virtual void set_pitch(const double p){pitch_rad = p;}
 	virtual void set_roll(const double r){roll_rad = r;}
+
+	object(const object&) = default;
+	object& operator=(const object&) = default;
+
+	object() : clr(0), img(), class_name(""), name(""){}
+	virtual ~object() = default;
 };
 //typedef object* object_pointer; //maybe change it to unique_ptr or shared_ptr idk
 typedef object* object_pointer;
@@ -332,17 +340,22 @@ struct sphere : public object{
 	//, yaw_rad(y), pitch_rad(p), roll_rad(r)
 	{set_color(cl), set_class_name(), set_name(n)//, set_rotation(yr, pr, rr)
 	#ifdef IMAGE
-	, set_image(std::move(i)), set_rotation(yr, pr, rr)
+	, set_image(/*std::move(*/i/*)*/), set_rotation(yr, pr, rr)
 	#endif
 	;
 	}
     virtual void set_color(const color c){clr = c;}
 	virtual void set_name(const char* str){name = str;}
 	#ifdef IMAGE
-	virtual void set_image(image&& i){img = std::move(i);}
+	virtual void set_image(image/*&&*/ i){img = /*std::move(*/i/*)*/;}
 	#endif
 	virtual void set_class_name(){class_name = "sphere";}
-    virtual void on_hit(const std::function<void(const vector&, const hit_val&)>& input_function){pressed = input_function;}
+	virtual void on_hit(const std::function<void(const vector&, const hit_val&)>& input_function){pressed = input_function;}
+	virtual void translate(const double x, const double y, const double z) override{
+		center.x += x;
+		center.y += y;
+		center.z += z;
+	}
 	virtual void set_rotation(const double y, const double p, const double r){yaw_rad = y, pitch_rad = p, roll_rad = r;}
 	virtual void set_yaw(const double y){yaw_rad = y;}
 	virtual void set_pitch(const double p){pitch_rad = p;}
@@ -400,7 +413,7 @@ struct sphere : public object{
 			hit_spot.z = -sin_yar_x + cos_yar * hit_spot.z;
 		}
 		if(/*image_*/pitch_rad){
-			//todo: check if pitch is actually correct (make it so positive always migrates to top instead of going in circles)
+			//todo: check if pitch is actually correct
 			double cos_par = cos(/*image_*/pitch_rad), sin_par = sin(/*image_*/pitch_rad), sin_par_y = sin_par * hit_spot.y;
 			hit_spot.y = cos_par * hit_spot.y - sin_par * hit_spot.z;
 			hit_spot.z = sin_par_y + cos_par * hit_spot.z;
@@ -518,7 +531,7 @@ struct polygon : public object{
 		set_color(cl);
 		set_class_name();
 		set_name(n);
-		set_image(std::move(i));
+		set_image(/*std::move(*/i/*)*/);
 		if(sizeof...(l) < 3) throw;
 	}catch(...){std::cout << "error: number of points to polygon's constructor must be greater than two\n";}
 	#endif
@@ -528,7 +541,7 @@ struct polygon : public object{
 		set_class_name();
 		set_name(n);
 		#ifdef IMAGE
-		set_image(std::move(read_rgb_image("")));
+		set_image(/*std::move(*/read_rgb_image("")/*)*/);
 		#endif
         if(sizeof...(l) < 3) throw;
         //points = {(point(l))...};
@@ -541,7 +554,7 @@ struct polygon : public object{
 		set_class_name();
 		set_name("the default polygon");
         #ifdef IMAGE
-		set_image(std::move(read_rgb_image("")));
+		set_image(/*std::move(*/read_rgb_image("")/*)*/);
 		#endif
 		if(sizeof...(l) < 3) throw;
         //points = {(point(l))...};
@@ -551,7 +564,7 @@ struct polygon : public object{
 	virtual void set_color(const color c){clr = c;}
     virtual void set_name(const char* str){name = str;}
 	#ifdef IMAGE
-	virtual void set_image(image&& i){img = std::move(i);}
+	virtual void set_image(image/*&&*/ i){img = /*std::move(*/i/*)*/;}
 	#endif
 	virtual void set_class_name(){class_name = "polygon";}
 	virtual void on_hit(const std::function<void(const vector&, const hit_val&)>& input_function){pressed = input_function;}
@@ -563,6 +576,9 @@ struct polygon : public object{
 			centroid.z = (points[0].z + points[1].z + points[2].z) / 3;
 		}else{/*todo: calculate*/}
 		return centroid;
+	}
+	virtual void translate(const double x, const double y, const double z) override{
+		for(auto& i : points) i.x += x, i.y += y, i.z += z;
 	}
 	virtual void set_rotation(const double y, const double p, const double r){
 		point centroid = calculate_centroid();
@@ -927,7 +943,41 @@ struct polygon : public object{
     //vector a, b, c;
     //double k;
 };
-
+//todo: implement
+#if 0
+enum class cone_type{
+	default_cone, //circular base
+	elliptic_cone, //elliptical base
+	right_circular_cone, //circular base
+};
+template<cone_type c = cone_type::default_cone>
+struct cone : public object{
+	struct base{ //circle
+		double radius;
+		point center;
+		base(double r, point c) : radius(r), center(c){}
+	};
+	point vertex;
+};
+template<>
+struct cone<cone_type::elliptic_cone> : public object{
+	struct base{ //ellipse
+		point center;
+		double semi_major_axis/*longest radius*/, semi_minor_axis/*shortest radius*/;
+		base(double major, double minor, point c) : semi_major_axis(major), semi_minor_axis(minor), center(c){}
+	}
+	point vertex;
+}
+template<>
+struct cone<cone_type::right_circular_cone> : public object{
+	struct base{ //circle
+		double radius;
+		point center;
+		base(double r, point c) : radius(r), center(c){}
+	};
+	point vertex;
+};
+#endif
 struct doughnut : public object{
     point center;
     double minor_radius, major_radius;
@@ -940,6 +990,11 @@ struct doughnut : public object{
     virtual void set_name(const char* str){name = str;}
 	virtual void set_class_name(){class_name = "doughnut";}
 	virtual void on_hit(const std::function<void(const vector&, const hit_val&)>& input_function){pressed = input_function;}
+	virtual void translate(const double x, const double y, const double z) override{
+		center.x += x;
+		center.y += y;
+		center.z += z;
+	}
 	virtual void set_rotation(const double y, const double p, const double r){yaw_rad = y, pitch_rad = p, roll_rad = r;}
 	virtual void set_yaw(const double y){yaw_rad = y;}
 	virtual void set_pitch(const double p){pitch_rad = p;}
@@ -954,7 +1009,7 @@ struct doughnut : public object{
 			u.z = -sin_yar_x + cos_yar * u.z;
 		}
 		if(pitch_rad){
-			//todo: check if pitch is actually correct (make it so positive always migrates to top instead of going in circles)
+			//todo: check if pitch is actually correct
 			double cos_par = cos(-pitch_rad), sin_par = sin(-pitch_rad), sin_par_y = sin_par * u.y;
 			u.y = cos_par * u.y - sin_par * u.z;
 			u.z = sin_par_y + cos_par * u.z;
@@ -1022,55 +1077,10 @@ struct doughnut : public object{
 private:
     double epsilon;
 };
-#if 0
-#ifndef IMAGE
-sphere s(RGB(0, 0, 255), sqrt(100000), point(100, 41.5, 2000), "the big red sphere");
-#else
-sphere s(no_color, sqrt(100000), point(0, 50, 2000), "the big blue earth", read_rgb_image("images/earth.bmp"));
-#endif
-//doughnut d(RGB(0, 255, 0), 200, 300, point(100, 100, 5000));
-doughnut d(RGB(255, 0, 255), 90, 1500, point(0, 0, 0), "the laggy doughnut", 1.57, 1);
-#ifndef IMAGE
-point p1(-250, -300, 2400), p2(250, 200, 1500), p3(350, -100, 1000)
-#ifdef QUAD
-    , p4(-250, -100, 2000)
-#endif
-;
-#else
-point p1(-350, -165, 2400), p2(350, -165, 2400), p3(0, /*-1000*/-1400, 2400)
-#ifdef QUAD
-	, p4(0, 1000, 24000)
-#endif
-;
-#endif
-polygon p(
-#ifndef IMAGE
-RGB(0, 255, 0)
-#else
-no_color
-#endif
-,
-#ifdef QUAD
-"the funny quadrilateral"
-#else
-"the funny triangle"
-#endif
-#ifdef IMAGE
-, read_rgb_image("images/cone.bmp")
-#endif
-, p1, p2, p3
-#ifdef QUAD
-    , p4
-#endif
-);
-std::vector<object_pointer> world = {&s, &p
-#ifdef NO_DOUGHNUT
-	};
-#else
-, &d};
-#endif
-#endif
 std::vector<std::unique_ptr<object>> world;
+void translate_world(const double x, const double y, const double z){
+	for(auto& i : world) i->translate(x, y, z);
+}
 constexpr double convert_horizontal_fov_to_radians = //todo: maybe just make it a bool and ternary the 0.0175 in calculating for z
 #ifdef in_radians
 //1 / 0.0175 //to cancel out the 0.0175
@@ -1091,6 +1101,7 @@ public:
 plane_setup_type plane_setup;
 //todo: make an option where the edges of shapes are not smoothened, if a pixel hit go back and see where it hit
 #ifdef SMOOTHEN
+	//todo: create an option for vertical smoothing
 	#ifndef SMOOTHEN_AMOUNT
 		#define SMOOTHEN_AMOUNT 2
 	#endif
@@ -1148,7 +1159,7 @@ std::function<void()> render =
     				i.z = -sin_yar_x + cos_yar * i.z;
     			}
     			if(pitch_angle_radians){
-    				//todo: check if pitch is actually correct (make it so positive always migrates to top instead of going in circles)
+    				//todo: check if pitch is actually correct
     				double cos_par = cos(pitch_angle_radians), sin_par = sin(pitch_angle_radians), sin_par_y = sin_par * i.y;
     				i.y = cos_par * i.y - sin_par * i.z;
     				i.z = sin_par_y + cos_par * i.z;
@@ -1199,7 +1210,6 @@ std::function<void()> render =
 	if(ypr){
 		//todo: start with a unit vector, and rotate it by the angle amount in either radians or degrees (fov / width_px) or something every time you move one pixel right
 		vector start = plane[0][0]; //start at top left
-		//todo: row_inc.y is always 0 (i think), so why have it
 		vector row_inc = (plane[2][0] - plane[2][1]) / width_px, column_dec = (plane[0][0] - plane[0][1]) / height_px;
 		//std::cout << "row_inc: " << row_inc.x << ' ' << row_inc.y << ' ' << row_inc.z << '\n';
 		//std::cout << "column_dec: " << column_dec.x << ' ' << column_dec.y << ' ' << column_dec.z << '\n';
@@ -1298,9 +1308,9 @@ std::function<void()> render =
 					/*std::pair<bool, double>*/ hit_val hit_a = can_hit[w]->hit(v);
 					//if(small_change) hit_b = smallest->hit(v), small_change = false;
 
-					if(unlikely(hit_a.first)){
+					if(/*unlikely(*/hit_a.first/*)*/){
 						hit_nothing = false;
-						if(unlikely(hit_b.first)){
+						if(/*unlikely(*/hit_b.first/*)*/){
 							if(hit_a.second < hit_b.second)
 								smallest = can_hit[w], hit_b = smallest->hit(v);//small_change = true;
 						}
@@ -1308,7 +1318,7 @@ std::function<void()> render =
 					}
 					else hit_nothing = !hit_b.first;
 				}
-				if(likely(hit_nothing)) framebuf[index] = RGB(255, 255, 255);//RGB(255, 0, 0);
+				if(/*likely(*/hit_nothing/*)*/) framebuf[index] = RGB(255, 255, 255);//RGB(255, 0, 0);
 				else 
 				#ifndef IMAGE
 					framebuf[index] = smallest->clr;
@@ -1396,22 +1406,55 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
             DeleteDC(hdc);
             break;
         }
-        case WM_KEYDOWN:
+        case WM_KEYDOWN:{
+			#ifndef MOVEMENT_AMOUNT
+				#define MOVEMENT_AMOUNT 10
+			#endif
+			static_assert(MOVEMENT_AMOUNT >= 0, "movement amount must be greater or equal to 0");
+			static point camera_center(0, 0, MOVEMENT_AMOUNT), camera_right(MOVEMENT_AMOUNT, 0, 0);
+			//std::cout << "camera_center: " << camera_center.x << ' ' << camera_center.y << ' ' << camera_center.z << '\n';
 			switch(w){
-				case 'W': case VK_UP:
+				/*case 'W':*/ case VK_UP:
 					pitch_angle_radians = pitch_angle_radians + 0.15;
+					camera_center.rotate_pitch(0.15);
+					camera_right.rotate_pitch(0.15);
 					break;
-				case 'S': case VK_DOWN:
+				/*case 'S':*/ case VK_DOWN:
 					pitch_angle_radians = pitch_angle_radians - 0.15;
+					camera_center.rotate_pitch(-0.15);
+					camera_right.rotate_pitch(-0.15);
 					break;
-				case 'A': case VK_LEFT:
+				/*case 'A':*/ case VK_LEFT:
 					yaw_angle_radians = yaw_angle_radians - 0.15;
+					camera_center.rotate_yaw(-0.15);
+					camera_right.rotate_yaw(-0.15);
 					break;
-				case 'D': case VK_RIGHT:
+				/*case 'D':*/ case VK_RIGHT:
 					yaw_angle_radians = yaw_angle_radians + 0.15;
+					camera_center.rotate_yaw(0.15);
+					camera_right.rotate_yaw(0.15);
+					break;
+				case 'W':
+					//todo: change so its moving in the direction of yaw pitch and roll
+					//basically move all shapes the opposite way the camera "moves"
+					//translate_world(0, 0, -MOVEMENT_AMOUNT);
+					//negate y because pitch rotates the other way idk
+					translate_world(-camera_center.x, -(-camera_center.y), -camera_center.z);
+					break;
+				case 'S':
+					//translate_world(0, 0, MOVEMENT_AMOUNT);
+					translate_world(camera_center.x, -(camera_center.y), camera_center.z);
+					break;
+				case 'A':
+					//translate_world(MOVEMENT_AMOUNT, 0, 0);
+					translate_world(camera_right.x, -(camera_right.y), camera_right.z);
+					break;
+				case 'D':
+					translate_world(-camera_right.x, -(-camera_right.y), -camera_right.z);
 					break;
 			}
         	break;
+		}
 		case WM_LBUTTONDOWN:{
 			int x = GET_X_LPARAM(l), y = GET_Y_LPARAM(l);
             std::vector<object_pointer> can_hit;

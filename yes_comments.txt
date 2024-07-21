@@ -142,6 +142,56 @@ case WM_GETMINMAXINFO:{
 
 above render() in global scope:
 
+#if 0
+#ifndef IMAGE
+sphere s(RGB(0, 0, 255), sqrt(100000), point(100, 41.5, 2000), "the big red sphere");
+#else
+sphere s(no_color, sqrt(100000), point(0, 50, 2000), "the big blue earth", read_rgb_image("images/earth.bmp"));
+#endif
+//doughnut d(RGB(0, 255, 0), 200, 300, point(100, 100, 5000));
+doughnut d(RGB(255, 0, 255), 90, 1500, point(0, 0, 0), "the laggy doughnut", 1.57, 1);
+#ifndef IMAGE
+point p1(-250, -300, 2400), p2(250, 200, 1500), p3(350, -100, 1000)
+#ifdef QUAD
+    , p4(-250, -100, 2000)
+#endif
+;
+#else
+point p1(-350, -165, 2400), p2(350, -165, 2400), p3(0, /*-1000*/-1400, 2400)
+#ifdef QUAD
+	, p4(0, 1000, 24000)
+#endif
+;
+#endif
+polygon p(
+#ifndef IMAGE
+RGB(0, 255, 0)
+#else
+no_color
+#endif
+,
+#ifdef QUAD
+"the funny quadrilateral"
+#else
+"the funny triangle"
+#endif
+#ifdef IMAGE
+, read_rgb_image("images/cone.bmp")
+#endif
+, p1, p2, p3
+#ifdef QUAD
+    , p4
+#endif
+);
+std::vector<object_pointer> world = {&s, &p
+#ifdef NO_DOUGHNUT
+	};
+#else
+, &d};
+#endif
+#endif
+
+
 auto comp = [](bool& hit_nothing, vector v, object* a, object *b){
     // bagel supremacy
     std::pair<bool, double> hit_a = a->hit(v), hit_b = b->hit(v);
