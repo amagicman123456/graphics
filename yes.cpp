@@ -331,7 +331,7 @@ struct sphere : public object{
 	//#endif
     sphere(color cl, double r, point c, const char* n = "the default sphere"
 	#ifdef IMAGE
-	, image&& i = read_rgb_image(""), double yr = 0, double pr = 0, double rr = 0
+	, image/*&&*/ i = read_rgb_image(""), double yr = 0, double pr = 0, double rr = 0
 	#endif 
 	) : radius(r), center(c)
 	//#ifdef IMAGE
@@ -527,7 +527,7 @@ struct polygon : public object{
     std::vector<point> points/*{}*/;
 	#ifdef IMAGE
     //polygon(color cl, const char* n, image&& i, auto... l) try : points{(point(l))...}{
-	template<typename ...T> polygon(color cl, const char* n, image&& i, T... l) try : points{(point(l))...}{
+	template<typename ...T> polygon(color cl, const char* n, image/*&&*/ i, T... l) try : points{(point(l))...}{
 		set_color(cl);
 		set_class_name();
 		set_name(n);
@@ -638,7 +638,7 @@ struct polygon : public object{
         p.x *= factor;
         p.y *= factor;
         p.z = greatest;
-    };
+    }
     /*std::pair<bool, double>*/ hit_val hit(vector u) const override{
 		static double yar_snap = yaw_angle_radians, par_snap = pitch_angle_radians, rar_snap = roll_angle_radians;
 		static double y_snap = yaw_rad, p_snap = pitch_rad, r_snap = roll_rad;
@@ -943,41 +943,81 @@ struct polygon : public object{
     //vector a, b, c;
     //double k;
 };
-//todo: implement
-#if 0
-enum class cone_type{
-	default_cone, //circular base
-	elliptic_cone, //elliptical base
-	right_circular_cone, //circular base
-};
-template<cone_type c = cone_type::default_cone>
-struct cone : public object{
-	struct base{ //circle
-		double radius;
-		point center;
-		base(double r, point c) : radius(r), center(c){}
-	};
-	point vertex;
-};
-template<>
-struct cone<cone_type::elliptic_cone> : public object{
-	struct base{ //ellipse
-		point center;
-		double semi_major_axis/*longest radius*/, semi_minor_axis/*shortest radius*/;
-		base(double major, double minor, point c) : semi_major_axis(major), semi_minor_axis(minor), center(c){}
-	}
-	point vertex;
+namespace cone_type{
+	struct default_cone{};
+	struct elliptical_cone{};
 }
-template<>
-struct cone<cone_type::right_circular_cone> : public object{
-	struct base{ //circle
-		double radius;
-		point center;
-		base(double r, point c) : radius(r), center(c){}
-	};
-	point vertex;
+enum class cone_direction{
+	xy,
+	xz,
+	yz
 };
-#endif
+template<typename type = cone_type::default_cone>
+struct cone : public object{
+	cone(cone_direction cd, point c, double r, point v, color clr = no_color, const char* n = "", 
+		#ifdef IMAGE
+			image i = read_rgb_image(""),
+		#endif
+			cone_type::default_cone* sfinae[std::is_same<type, cone_type::default_cone>::value] = 0) 
+		: base(cd, c, r), vertex(v){
+		set_color(clr);
+		set_class_name();
+		set_name(n);
+		set_image(i);
+	}
+	cone(cone_direction cd, point c, double major, double minor, point v, color clr = no_color, const char* n = "", 
+		#ifdef IMAGE
+			image i = read_rgb_image(""),
+		#endif
+			cone_type::elliptical_cone* sfinae[std::is_same<type, cone_type::elliptical_cone>::value] = 0)
+		: base(cd, c, major, minor), vertex(v){
+		set_color(clr);
+		set_class_name();
+		set_name(n);
+		set_image(i);
+	}
+	template<typename T, typename unused = void> struct base_type;
+	template<typename unused>
+	struct base_type<cone_type::default_cone, unused>{//circle base in 2d: (x - h)^2 + (y - k)^2 = r^2
+		cone_direction base_direction;
+		point center;
+		double radius;
+		base_type(cone_direction cd, point c, double r) : base_direction(cd), center(c), radius(r){}
+	};
+	template<typename unused>
+	struct base_type<cone_type::elliptical_cone, unused>{//ellipse base in 2d: ((x - h)^2 / (semi_major_axis)^2) + ((y - k)^2 / (semi_minor_axis)^2) = 1
+		cone_direction base_direction;
+		point center;
+		double semi_major_axis, semi_minor_axis;
+		base_type(cone_direction cd, point c, double major, double minor) : base_direction(cd), center(c), semi_major_axis(major), semi_minor_axis(minor){}
+	};
+	base_type<type> base;
+	point vertex;
+	virtual void set_color(const color c){clr = c;}
+    virtual void set_name(const char* str){name = str;}
+	virtual void set_class_name(){class_name = "cone";}
+	virtual void on_hit(const std::function<void(const vector&, const hit_val&)>& input_function){pressed = input_function;}
+	virtual void translate(const double x, const double y, const double z) override{
+		base.center.x += x;
+		base.center.y += y;
+		base.center.z += z;
+		vertex.x += x;
+		vertex.y += y;
+		vertex.z += z;
+	}
+	virtual void set_rotation(const double y, const double p, const double r){yaw_rad = y, pitch_rad = p, roll_rad = r;}
+	virtual void set_yaw(const double y){yaw_rad = y;}
+	virtual void set_pitch(const double p){pitch_rad = p;}
+	virtual void set_roll(const double r){roll_rad = r;}
+	hit_val hit(vector u, cone_type::default_cone* sfinae[std::is_same<type, cone_type::default_cone>::value] = 0) const override{
+		
+		return hit_val(true, 0);
+	}
+	hit_val hit(vector u, cone_type::elliptical_cone* sfinae[std::is_same<type, cone_type::elliptical_cone>::value] = 0) const override{
+		
+		return hit_val(true, 0);
+	}
+};
 struct doughnut : public object{
     point center;
     double minor_radius, major_radius;
