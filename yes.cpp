@@ -4,12 +4,13 @@
 #include <functional>
 #include <algorithm>
 #include <iostream>
+#include <cassert>
 #include <atomic>
 #include <vector>
 #include <cmath>
-#if __cplusplus < 201703L
+//#if __cplusplus < 201703L
 	#define M_PI 3.14159265358979323846
-#endif
+//#endif
 #ifdef SOUND
 	#include <memory>
 	#if __cplusplus >= 201703L
@@ -23,19 +24,20 @@
 #ifdef IMAGE
 #include <fstream>
 #include <memory>
+typedef std::/*unique*/shared_ptr<uint8_t[]> data_ptr;
 struct image{
 	image() : width(0), row_bytes(0), height(0), data(nullptr){}
-	image(image&& other){
-		width = other.width;
-		row_bytes = other.row_bytes;
-		height = other.height;
-		data = std::move(other.data);
-	}
-	image(uint32_t a, int32_t b, std::unique_ptr<uint8_t[]>&& c) : width(a), row_bytes((3 * a + 3) & -4) /* round up to multiple of 4 */, height(b), data(std::move(c)){}
+	//image(image&& other) : width(other.width), row_bytes(other.row_bytes), height(other.height), data(std::move(other.data)){
+		//width = other.width;
+		//row_bytes = other.row_bytes;
+		//height = other.height;
+		//data = std::move(other.data);
+	//}
+	image(uint32_t a, int32_t b, /*std::unique_ptr<uint8_t[]>*/data_ptr/*&&*/ c) : width(a), row_bytes((3 * a + 3) & -4) /* round up to multiple of 4 */, height(b), data(/*std::move(*/c/*)*/){}
 	uint32_t width;
 	uint32_t row_bytes;
 	int32_t height;
-	std::unique_ptr<uint8_t[]> data;
+	/*std::unique_ptr<uint8_t[]>*/data_ptr data;
 	uint32_t color_at(uint32_t x, uint32_t y) const{
 		uint32_t index = /*(height - y - 1)*/y * row_bytes + 3 * x;
 		//return (uint32_t)data[index] << 24 |
@@ -45,13 +47,13 @@ struct image{
 			   (uint32_t)data[index + 1] << 8 |
 			   (uint32_t)data[index + 2];
 	}
-	image& operator=(image&& other){
-		width = other.width;
-		row_bytes = other.row_bytes;
-		height = other.height;
-		data = std::move(other.data);
-		return *this;
-	}
+	//image& operator=(image&& other){
+		//width = other.width;
+		//row_bytes = other.row_bytes;
+		//height = other.height;
+		//data = std::move(other.data);
+		//return *this;
+	//}
 	//make iterators if wanted
 };
 /*
@@ -90,16 +92,16 @@ struct image{
 	return image(width, height, std::move(data));\
 }()
 */
-image read_rgb_image(const char* path){
+image read_rgb_image(const char* const path){
 	std::ifstream bitmap{path, std::ios::in | std::ios::binary};
-	if(!bitmap) return image(0, 0, std::unique_ptr<uint8_t[]>(nullptr));
+	if(!bitmap) return image(0, 0, /*std::unique_ptr<uint8_t[]>*/data_ptr(nullptr));
 	char buf[26];
 	bitmap.read(buf, 26);
 	uint32_t width = *reinterpret_cast<uint32_t*>(buf + 18);
 	int32_t height = *reinterpret_cast<int32_t*>(buf + 22);
 	bool sign = height > 0;
 	uint32_t size = 3 * width * (sign ? height : -height);
-	std::unique_ptr<uint8_t[]> data = std::make_unique<uint8_t[]>(size);
+	/*std::unique_ptr<uint8_t[]>*/data_ptr data = std::make_unique<uint8_t[]>(size);
 	bitmap.seekg(*reinterpret_cast<uint32_t*>(buf + 10), std::ios_base::beg);
 	bitmap.read(reinterpret_cast<char*>(data.get()), size);
 	if(sign)
@@ -132,13 +134,13 @@ double width = 1, height = height_px / (double)width_px,
 	#define horizontal_fov 90
 #endif
 double /*horizontal_fov = 90,*/ vertical_fov = atan(tan(height_px / 2.0) * height_px / (double)width_px);
-inline double square(double x){
+inline double square(const double x){
     return x * x;
 }
-inline double greater(double a, double b){
+inline double greater(const double a, const double b){
     return a > b ? a : b;
 }
-inline double abs_val(double a){
+inline double abs_val(const double a){
     return a < 0 ? -a : a;
 }
 struct point{
@@ -152,7 +154,7 @@ struct point{
 	double magnitude() const{
 		return sqrt(this->magnitude_squared());
 	}
-	void set_normalized(bool a){is_normalized = a;}
+	void set_normalized(const bool a){is_normalized = a;}
 	void normalize(){
 		set_normalized(true);
 		const double magnitude = this->magnitude();
@@ -161,32 +163,39 @@ struct point{
 	inline point operator-() const{
 		return point(-x, -y, -z);
 	}
-    inline point operator-(point f) const{
+    inline point operator-(const point& f) const{
         return point(x - f.x, y - f.y, z - f.z);
     }
-    inline point& operator-=(point g){
+    inline point& operator-=(const point& g){
         x -= g.x;
         y -= g.y;
         z -= g.z;
         return *this;
     }
-	inline point& operator+=(point o){
+	inline point& operator+=(const point& o){
 		x += o.x;
 		y += o.y;
 		z += o.z;
 		return *this;
 	}
-    inline point operator*(double h) const{
+    inline point operator*(const double h) const{
         return point(x * h, y * h, z * h);
     }
-	inline point operator/(double i) const{
+	inline point operator/(const double i) const{
 		return point(x / i, y / i, z / i);
 	}
-	void rotate(double y, double p, double r){
-		//todo: cache previous values of sin(angle) and cos(angle)
-		double sin_yar = sin(y), cos_yar = cos(y),
-			   sin_par = sin(p), cos_par = cos(p),
-			   sin_rar = sin(r), cos_rar = cos(r);
+	void rotate(const double y, const double p, const double r){
+		//todo: cache previous values of sin(angle) and cos(angle), maybe save the number rounded to the thousandths place, and round the next one to the same place before looking it up
+		//double sin_yar = sin(y), cos_yar = cos(y),
+		//	   sin_par = sin(p), cos_par = cos(p),
+		//	   sin_rar = sin(r), cos_rar = cos(r);
+		double sin_yar, cos_yar, sin_par, cos_par, sin_rar, cos_rar;
+		if(y) sin_yar = sin(y), cos_yar = cos(y);
+		else sin_yar = 0, cos_yar = 1;
+		if(p) sin_par = sin(p), cos_par = cos(p);
+		else sin_par = 0, cos_par = 1;
+		if(r) sin_rar = sin(r), cos_rar = cos(r);
+		else sin_rar = 0, cos_rar = 1;
 		const double x_copy = this->x, y_copy = this->y;
 		this->x = (cos_yar * cos_rar + sin_yar * sin_par * sin_rar) * this->x
 				+ (sin_yar * sin_par * cos_rar - cos_yar * sin_rar) * this->y
@@ -198,7 +207,7 @@ struct point{
 				+ (sin_yar * sin_rar + cos_yar * sin_par * cos_rar) * y_copy
 				+ (cos_yar * cos_par) * this->z;
 	}
-	void rotate_yaw(double y){
+	void rotate_yaw(const double y){
 		//todo: cache previous values of sin(angle) and cos(angle)
 		if(y){
 			double cos_yar = cos(y), sin_yar = sin(y), sin_yar_x = sin_yar * this->x;
@@ -206,16 +215,16 @@ struct point{
 			this->z = -sin_yar_x + cos_yar * this->z;
 		}
 	}
-	void rotate_pitch(double p){
+	void rotate_pitch(const double p){
 		//todo: cache previous values of sin(angle) and cos(angle)
 		if(p){
-			//todo: check if pitch is actually correct (make it so positive always migrates to top instead of going in circles)
+			//todo: check if pitch is actually correct
 			double cos_par = cos(p), sin_par = sin(p), sin_par_y = sin_par * this->y;
 			this->y = cos_par * this->y - sin_par * this->z;
 			this->z = sin_par_y + cos_par * this->z;
 		}
 	}
-	void rotate_roll(double r){
+	void rotate_roll(const double r){
 		//todo: cache previous values of sin(angle) and cos(angle)
 		if(r){
 			//todo: check if roll is actually correct
@@ -256,20 +265,21 @@ struct point{
 };
 typedef uint32_t color;
 typedef point vector;
-inline vector cross_product(vector a, vector b){
+inline vector cross_product(const vector& a, const vector& b){
     return vector(a.y * b.z - b.y * a.z, a.z * b.x - b.z * a.x, a.x * b.y - b.x * a.y);
 }
-inline double dot_product(vector a, vector b){
+inline double dot_product(const vector& a, const vector& b){
     return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 typedef std::vector<point> plane;
 typedef std::vector<plane> plane_array;
-#define no_color 4278190080
+#define no_color 4278190080 //the unused byte
 struct hit_val{
 	bool first;
 	double second;
 	color third;
-	hit_val(bool b, double d, color c = no_color/*use unused byte*/) : first(b), second(d), third(c){}
+	hit_val() : first(0), second(0), third(no_color){}
+	hit_val(bool b, double d, color c = no_color) : first(b), second(d), third(c){}
 };
 struct object{
     virtual /*std::pair<bool, double>*/ hit_val hit(vector u) const = 0;
@@ -277,24 +287,41 @@ struct object{
     virtual void set_color(const color c){clr = c;}
     color clr;
 	#ifdef IMAGE
-	virtual void set_image(image&& i){img = std::move(i);}
+	virtual void set_image(image/*&&*/ i){img = /*std::move(*/i/*)*/;}
 	image img;
 	#endif
 	virtual void set_name(const char* str){name = str;}
+	virtual void set_class_name() = 0;
 	const char *class_name, *name;
 	double yaw_rad = 0, pitch_rad = 0, roll_rad = 0;
-	std::function<void(const vector&)> pressed = [](const vector&){};
-	virtual void on_hit(const std::function<void(const vector&)>& input_function){pressed = input_function;}
+	//todo: pass in a struct with more details to pressed() like color
+	std::function<void(const vector&, const hit_val&)> pressed = [](const vector&, const hit_val&){};
+	virtual void on_hit(const std::function<void(const vector&, const hit_val&)>& input_function){pressed = input_function;}
+	virtual void translate(const double x, const double y, const double z) = 0;
 	virtual void set_rotation(const double y, const double p, const double r){yaw_rad = y, pitch_rad = p, roll_rad = r;}
 	virtual void set_yaw(const double y){yaw_rad = y;}
 	virtual void set_pitch(const double p){pitch_rad = p;}
 	virtual void set_roll(const double r){roll_rad = r;}
+
+	object(const object&) = default;
+	object& operator=(const object&) = default;
+
+	object() : clr(0), img(), class_name(""), name(""){}
+	virtual ~object() = default;
 };
 //typedef object* object_pointer; //maybe change it to unique_ptr or shared_ptr idk
 typedef object* object_pointer;
+/*
+bool on_plane_normal_side(const plane& bound, const point& p){
+	vector a = bound[1] - bound[0], b = bound[2] - bound[0], cross = cross_product(a, b);
+	double A = -cross.x * bound[0].x, B = -cross.y * bound[0].y, C = -cross.z * bound[0].z;
+	//todo: idk if this is correct
+	return A * p.x + B * p.y + C * p.z <= 0;
+}
+*/
 double plane_distance(const plane& bound, const point& p){ 
 	vector a = bound[1] - bound[0], b = bound[2] - bound[0], cross = cross_product(a, b);
-	double cross_mag = sqrt(cross.x * cross.x + cross.y * cross.y + cross.z * cross.z);
+	double cross_mag = cross.magnitude();//sqrt(cross.x * cross.x + cross.y * cross.y + cross.z * cross.z);
 	cross.x /= cross_mag, cross.y /= cross_mag, cross.z /= cross_mag;
 	return dot_product(cross, p);
 }
@@ -306,7 +333,7 @@ struct sphere : public object{
 	//#endif
     sphere(color cl, double r, point c, const char* n = "the default sphere"
 	#ifdef IMAGE
-	, image&& i = read_rgb_image(""), double yr = 0, double pr = 0, double rr = 0
+	, image/*&&*/ i = read_rgb_image(""), double yr = 0, double pr = 0, double rr = 0
 	#endif 
 	) : radius(r), center(c)
 	//#ifdef IMAGE
@@ -315,17 +342,22 @@ struct sphere : public object{
 	//, yaw_rad(y), pitch_rad(p), roll_rad(r)
 	{set_color(cl), set_class_name(), set_name(n)//, set_rotation(yr, pr, rr)
 	#ifdef IMAGE
-	, set_image(std::move(i)), set_rotation(yr, pr, rr)
+	, set_image(/*std::move(*/i/*)*/), set_rotation(yr, pr, rr)
 	#endif
 	;
 	}
     virtual void set_color(const color c){clr = c;}
 	virtual void set_name(const char* str){name = str;}
 	#ifdef IMAGE
-	virtual void set_image(image&& i){img = std::move(i);}
+	virtual void set_image(image/*&&*/ i){img = /*std::move(*/i/*)*/;}
 	#endif
-	virtual void set_class_name(){class_name = "sphere";}
-    virtual void on_hit(const std::function<void(const vector&)>& input_function){pressed = input_function;}
+	virtual void set_class_name() override{class_name = "sphere";}
+	virtual void on_hit(const std::function<void(const vector&, const hit_val&)>& input_function){pressed = input_function;}
+	virtual void translate(const double x, const double y, const double z) override{
+		center.x += x;
+		center.y += y;
+		center.z += z;
+	}
 	virtual void set_rotation(const double y, const double p, const double r){yaw_rad = y, pitch_rad = p, roll_rad = r;}
 	virtual void set_yaw(const double y){yaw_rad = y;}
 	virtual void set_pitch(const double p){pitch_rad = p;}
@@ -363,11 +395,14 @@ struct sphere : public object{
 		double distance = -dot - sqrt(determinant);
 		//double distance = (-b - sqrt(determinant)) / (2 * a);
 		//std::cout << distance << '\n';
-		pressed(u);
+		//pressed(u);
+		hit_val h{true, distance};
 		#ifndef IMAGE
-		return /*std::pair<bool, double>*/ hit_val(true, distance);
+		pressed(u, h);
+		//return /*std::pair<bool, double>*/ hit_val(true, distance);
+		return h;
 		#else
-		if(!img.width || !img.height) return hit_val(true, distance);
+		if(!img.width || !img.height) return h;//return hit_val(true, distance);
 		vector hit_spot = (u * distance) - center;
 		//hit_spot.rotate_yaw(yaw_rad);
 		//hit_spot.rotate_pitch(pitch_rad);
@@ -380,7 +415,7 @@ struct sphere : public object{
 			hit_spot.z = -sin_yar_x + cos_yar * hit_spot.z;
 		}
 		if(/*image_*/pitch_rad){
-			//todo: check if pitch is actually correct (make it so positive always migrates to top instead of going in circles)
+			//todo: check if pitch is actually correct
 			double cos_par = cos(/*image_*/pitch_rad), sin_par = sin(/*image_*/pitch_rad), sin_par_y = sin_par * hit_spot.y;
 			hit_spot.y = cos_par * hit_spot.y - sin_par * hit_spot.z;
 			hit_spot.z = sin_par_y + cos_par * hit_spot.z;
@@ -400,7 +435,9 @@ struct sphere : public object{
 			double v = 0.5 + asin(hit_spot.y) / M_PI;
 			long x = lrint(u * img.width), y = lrint(v * img.height);
 			color hit_color = img.color_at(x, y);
-			return hit_val(true, distance, hit_color);
+			//return hit_val(true, distance, hit_color);
+			h.third = hit_color;
+			return h;
 		}
 		#endif
 	}
@@ -492,47 +529,50 @@ struct polygon : public object{
     std::vector<point> points/*{}*/;
 	#ifdef IMAGE
     //polygon(color cl, const char* n, image&& i, auto... l) try : points{(point(l))...}{
-	template<typename ...T> polygon(color cl, const char* n, image&& i, T... l) try : points{(point(l))...}{
+	template<typename ...T> polygon(color cl, const char* n, image/*&&*/ i, T... l) /*try*/ : points{(point(l))...}{
+		assert(sizeof...(l) >= 3);
 		set_color(cl);
 		set_class_name();
 		set_name(n);
-		set_image(std::move(i));
-		if(sizeof...(l) < 3) throw;
-	}catch(...){std::cout << "error: number of points to polygon's constructor must be greater than two\n";}
+		set_image(/*std::move(*/i/*)*/);
+		//if(sizeof...(l) < 3) throw;
+	}//catch(...){std::cout << "error: number of points to polygon's constructor must be greater than two\n";}
 	#endif
 	//polygon(color cl, const char* n, auto... l) try /*: clr(cl)*/ : points{(point(l))...}{
-    template<typename ...T> polygon(color cl, const char* n, T... l) try /*: clr(cl)*/ : points{(point(l))...}{
+    template<typename ...T> polygon(color cl, const char* n, T... l) /*try : clr(cl)*/ : points{(point(l))...}{
+		assert(sizeof...(l) >= 3);
 		set_color(cl);
 		set_class_name();
 		set_name(n);
 		#ifdef IMAGE
-		set_image(std::move(read_rgb_image("")));
+		set_image(/*std::move(*/read_rgb_image("")/*)*/);
 		#endif
-        if(sizeof...(l) < 3) throw;
+        //if(sizeof...(l) < 3) throw;
         //points = {(point(l))...};
         //a = points[1] - points[0], b = points[2] - points[0], c = cross_product(a, b);
         //k = c.x * points[0].x + c.y * points[1].y + c.z * points[2].z;
-    }catch(...){std::cout << "error: number of points to polygon's constructor must be greater than two\n";}
+    }//catch(...){std::cout << "error: number of points to polygon's constructor must be greater than two\n";}
 	//polygon(color cl, auto... l) try /*: clr(cl)*/ : points{(point(l))...}{
-	template<typename ...T> polygon(color cl, T... l) try /*: clr(cl)*/ : points{(point(l))...}{
-        set_color(cl);
+	template<typename ...T> polygon(color cl, T... l) /*try : clr(cl)*/ : points{(point(l))...}{
+        assert(sizeof...(l) >= 3);
+		set_color(cl);
 		set_class_name();
 		set_name("the default polygon");
         #ifdef IMAGE
-		set_image(std::move(read_rgb_image("")));
+		set_image(/*std::move(*/read_rgb_image("")/*)*/);
 		#endif
-		if(sizeof...(l) < 3) throw;
+		//if(sizeof...(l) < 3) throw;
         //points = {(point(l))...};
         //a = points[1] - points[0], b = points[2] - points[0], c = cross_product(a, b);
         //k = c.x * points[0].x + c.y * points[1].y + c.z * points[2].z;
-    }catch(...){std::cout << "error: number of points to polygon's constructor must be greater than two\n";}
+    }//catch(...){std::cout << "error: number of points to polygon's constructor must be greater than two\n";}
 	virtual void set_color(const color c){clr = c;}
     virtual void set_name(const char* str){name = str;}
 	#ifdef IMAGE
-	virtual void set_image(image&& i){img = std::move(i);}
+	virtual void set_image(image/*&&*/ i){img = /*std::move(*/i/*)*/;}
 	#endif
-	virtual void set_class_name(){class_name = "polygon";}
-	virtual void on_hit(const std::function<void(const vector&)>& input_function){pressed = input_function;}
+	virtual void set_class_name() override{class_name = "polygon";}
+	virtual void on_hit(const std::function<void(const vector&, const hit_val&)>& input_function){pressed = input_function;}
 	point calculate_centroid() const{
 		static point centroid;
 		if(points.size() == 3){
@@ -541,6 +581,9 @@ struct polygon : public object{
 			centroid.z = (points[0].z + points[1].z + points[2].z) / 3;
 		}else{/*todo: calculate*/}
 		return centroid;
+	}
+	virtual void translate(const double x, const double y, const double z) override{
+		for(auto& i : points) i.x += x, i.y += y, i.z += z;
 	}
 	virtual void set_rotation(const double y, const double p, const double r){
 		point centroid = calculate_centroid();
@@ -600,11 +643,14 @@ struct polygon : public object{
         p.x *= factor;
         p.y *= factor;
         p.z = greatest;
-    };
+    }
     /*std::pair<bool, double>*/ hit_val hit(vector u) const override{
 		static double yar_snap = yaw_angle_radians, par_snap = pitch_angle_radians, rar_snap = roll_angle_radians;
 		static double y_snap = yaw_rad, p_snap = pitch_rad, r_snap = roll_rad;
 		static std::vector<point> vertices;
+		#ifdef IMAGE
+		static double triangle_width, triangle_height;
+		#endif
 		#if __cplusplus >= 201703L
 		[[maybe_unused]]
 		#endif
@@ -630,10 +676,13 @@ struct polygon : public object{
 			double greatest = greater(greater(points[0].z, points[1].z), points[2].z);
 			for(point& i : vertices) stretch(greatest, i);
 			#ifdef IMAGE
-			if(is_triangle) 
-				centroid.x = (vertices[0].x + vertices[1].x + vertices[2].x) / 3, 
-				centroid.y = (vertices[0].y + vertices[1].y + vertices[2].y) / 3,
-				centroid.z = greatest;
+			if(is_triangle){ 
+				//centroid.x = (vertices[0].x + vertices[1].x + vertices[2].x) / 3, 
+				//centroid.y = (vertices[0].y + vertices[1].y + vertices[2].y) / 3,
+				//centroid.z = greatest;
+				centroid = calculate_centroid();
+				triangle_width = greater(greater(abs_val(vertices[1].x - vertices[0].x), abs_val(vertices[2].x - vertices[0].x)), abs_val(vertices[2].x - vertices[1].x)), triangle_height = greater(greater(abs_val(vertices[1].y - vertices[0].y), abs_val(vertices[2].y - vertices[0].y)), abs_val(vertices[2].y - vertices[1].y));
+			}
 			else{/*todo: calculate*/}
 			#endif
 			return true;
@@ -685,13 +734,15 @@ struct polygon : public object{
 		#endif
 		#endif
 		//may not be accurate for non-unit vectors, do something if its not normalized ig
-        double e = u.x * c.x + u.y * c.y + u.z * c.z;
-        double t = k / e;
+        //double e = u.x * c.x + u.y * c.y + u.z * c.z;
+        double e = dot_product(u, c);
+		double t = k / e;
         if(likely(!e || (u.z * t < 0))) return /*std::pair<bool, double>*/ hit_val(false, 0);
         point intersection(u.x * t, u.y * t, u.z * t);
 		//std::cout << "t: " << t << '\n';
 		//std::cout << "intersection: " << intersection.x << ' ' << intersection.y << ' ' << intersection.z << '\n';
-        double distance = sqrt(intersection.x * intersection.x + intersection.y * intersection.y + intersection.z * intersection.z);
+        //double distance = sqrt(intersection.x * intersection.x + intersection.y * intersection.y + intersection.z * intersection.z);
+		double distance = intersection.magnitude();
 		double greatest = greater(greater(points[0].z, points[1].z), points[2].z);
 
 		//return [&greatest, &distance, &intersection, this](std::vector<point>& points){
@@ -747,10 +798,13 @@ struct polygon : public object{
 				double greatest = greater(greater(points[0].z, points[1].z), points[2].z);
     			for(point& i : vertices) stretch(greatest, i);
             	#ifdef IMAGE
-				if(is_triangle) 
-					centroid.x = (vertices[0].x + vertices[1].x + vertices[2].x) / 3, 
-					centroid.y = (vertices[0].y + vertices[1].y + vertices[2].y) / 3,
-					centroid.z = greatest;
+				if(is_triangle){
+					//centroid.x = (vertices[0].x + vertices[1].x + vertices[2].x) / 3, 
+					//centroid.y = (vertices[0].y + vertices[1].y + vertices[2].y) / 3,
+					//centroid.z = greatest;
+					centroid = calculate_centroid();
+					triangle_width = greater(greater(abs_val(vertices[1].x - vertices[0].x), abs_val(vertices[2].x - vertices[0].x)), abs_val(vertices[2].x - vertices[1].x)), triangle_height = greater(greater(abs_val(vertices[1].y - vertices[0].y), abs_val(vertices[2].y - vertices[0].y)), abs_val(vertices[2].y - vertices[1].y)); 
+				}
 				else{/*calculate*/}
 				#endif
 				stretch(greatest, intersection);
@@ -785,8 +839,10 @@ struct polygon : public object{
                        w2 = (s4 - w1 * s3) / s1;
 				#ifndef IMAGE
 				bool hit_polygon = w1 >= 0 && w2 >= 0 && (w1 + w2) <= 1;
-				if(hit_polygon) pressed(u);
-				return hit_val(hit_polygon, distance);
+				hit_val h(hit_polygon, distance);
+				if(hit_polygon) pressed(u, h);
+				//return hit_val(hit_polygon, distance);
+				return h;
                 //return /*std::pair<bool, double>*/ hit_val(w1 >= 0 && w2 >= 0 && (w1 + w2) <= 1, distance);
             	#else
 				//do
@@ -801,9 +857,10 @@ struct polygon : public object{
                 bool neg = d1 < 0 || d2 < 0 || d3 < 0,
                      pos = d1 > 0 || d2 > 0 || d3 > 0,
                      ret = !(neg && pos);
-				if(ret) pressed(u);
+				hit_val h(ret, distance);
+				if(ret) pressed(u, h);
 				#ifndef IMAGE
-				return /*std::pair<bool, double>*/ hit_val(ret, distance);
+				//return /*std::pair<bool, double>*/ hit_val(ret, distance);
             	#else
 				//do
 				#endif
@@ -815,19 +872,23 @@ struct polygon : public object{
             if(((vertices[i].y > intersection.y) != (vertices[j].y > intersection.y)) &&
                 (intersection.x < (vertices[j].x - vertices[i].x) * (intersection.y - vertices[i].y) / (vertices[j].y - vertices[i].y) + vertices[i].x))
                     inside = !inside;
-		if(inside) pressed(u);
+		hit_val h(inside, distance);
+		if(inside) pressed(u, h);
 		#ifndef IMAGE
-		return /*std::pair<bool, double>*/ hit_val(inside, distance);
+		//return /*std::pair<bool, double>*/ hit_val(inside, distance);
+		return h;		
 		#else
-		if(!is_triangle) return hit_val(inside, distance);
-		if(!img.width || !img.height) return hit_val(inside, distance);
+		if(!is_triangle) return h;//return hit_val(inside, distance);
+		if(!img.width || !img.height) return h;//return hit_val(inside, distance);
 		//int x = img.width / 2 + intersection.x - centroid.x, y = img.height / 2 + intersection.y - centroid.y;
-	 	double triangle_width = greater(greater(abs_val(vertices[1].x - vertices[0].x), abs_val(vertices[2].x - vertices[0].x)), abs_val(vertices[2].x - vertices[1].x)), triangle_height = greater(greater(abs_val(vertices[1].y - vertices[0].y), abs_val(vertices[2].y - vertices[0].y)), abs_val(vertices[2].y - vertices[1].y)); 
-		double x = 0.5 + (intersection.x - centroid.x) / /*700 triangle width*/triangle_width, y = 0.5 + (intersection.y - centroid.y) / /*triangle height*/triangle_height;
+	 	//double triangle_width = greater(greater(abs_val(vertices[1].x - vertices[0].x), abs_val(vertices[2].x - vertices[0].x)), abs_val(vertices[2].x - vertices[1].x)), triangle_height = greater(greater(abs_val(vertices[1].y - vertices[0].y), abs_val(vertices[2].y - vertices[0].y)), abs_val(vertices[2].y - vertices[1].y)); 
+		double x = 0.5 + (intersection.x - centroid.x) / triangle_width, y = 0.5 + (intersection.y - centroid.y) / triangle_height;
 		//color hit_color = img.color_at(x, y);
-		if(x < 0 || x > 1 || y < 0 || y > 1) return hit_val(inside, distance, RGB(255, 255, 255));
+		if(x < 0 || x > 1 || y < 0 || y > 1){h.third = RGB(255, 255, 255); return h;}//return hit_val(inside, distance, RGB(255, 255, 255));
 		color hit_color = img.color_at(x * img.width, y * img.height);
-		return hit_val(inside, distance, hit_color);
+		h.third = hit_color;
+		return h;
+		//return hit_val(inside, distance, hit_color);
 		#endif
 		//}(const_cast<std::vector<point>&>(points));
 	}
@@ -860,20 +921,207 @@ struct polygon : public object{
         	//std::cout << "point " << i.x << ' ' << i.y << ' ' << i.z << 
 			//			 " distances: " << left_distance << ' ' << right_distance << ' ' << top_distance << ' ' << bottom_distance << '\n';
 			if(left_distance > 0 && right_distance > 0 && top_distance > 0 && bottom_distance > 0) return true;
+			//bool left_side = on_plane_normal_side(plane[0], i), right_side = on_plane_normal_side(plane[1], i), top_side = on_plane_normal_side(plane[2], i), bottom_side = on_plane_normal_side(plane[3], i);
+			//if(on_plane_normal_side(plane[0], i) && on_plane_normal_side(plane[1], i) && on_plane_normal_side(plane[2], i) && on_plane_normal_side(plane[3], i)) return true;
+			//if(left_side && right_side && top_side && bottom_side) return true;
+			//std::cout << "point " << i.x << ' ' << i.y << ' ' << i.z << '\n' <<
+			//			 "pitch angle: " << pitch_angle_radians << '\n' <<
+			//			 "on_side: " << left_side << ' ' << right_side << ' ' << top_side << ' ' << bottom_side << '\n';
+			//std::cout << "point " << i.x << ' ' << i.y << ' ' << i.z << '\n'; //<<
+			//			 " distances: " << left_distance << ' ' << right_distance << ' ' << top_distance << ' ' << bottom_distance << '\n';
 		}
         //return false;
 		//todo: moving left twice and down once makes the polygon disappear :(
 		//todo: when going down the distance to bottom becomes negative for some reason
         //return this->hit(plane[0][0]).first || this->hit(plane[0][1]).first || this->hit(plane[1][0]).first || this->hit(plane[1][1]).first; 
-    	bool corner_in_polygon = this->hit(plane[0][0]).first || this->hit(plane[0][1]).first || this->hit(plane[1][0]).first || this->hit(plane[1][1]).first; 
-		//if(!corner_in_polygon) std::cout << "nooooooooooooo\n";
+    	//bool corner_in_polygon = this->hit(plane[0][0]).first || this->hit(plane[0][1]).first || this->hit(plane[1][0]).first || this->hit(plane[1][1]).first; 
+		hit_val c1 = this->hit(plane[0][0]), c2 = this->hit(plane[0][1]), c3 = this->hit(plane[1][0]), c4 = this->hit(plane[1][1]);
+		bool corner_in_polygon = c1.first || c2.first || c3.first || c4.first;	
+		if(!corner_in_polygon){
+			//std::cout << "nooo, " << c1.second << ' ' << c2.second << ' ' << c3.second << ' ' << c4.second << '\n';
+			//std::cout << "points:\n";
+			//for(const auto& i : points) std::cout << i.x << ' ' << i.y << ' ' << i.z << '\n';
+		}
 		return corner_in_polygon;
 	}
 //private:
     //vector a, b, c;
     //double k;
 };
+namespace cone_type{
+	struct default_cone{};
+	struct elliptical_cone{};
+}
+enum class cone_direction{
+	xy,
+	xz,
+	yz
+};
+//#if __cplusplus >= 201703L
+template<typename type = cone_type::default_cone>
+struct cone : public object{
+	cone(cone_direction cd, point c, double r, point v, color clr = no_color, const char* n = "", 
+		#ifdef IMAGE
+			image i = read_rgb_image(""),
+		#endif
+			__attribute__((unused)) cone_type::default_cone* sfinae[std::is_same<type, cone_type::default_cone>::value] = 0) 
+		: base(cd, c, r), vertex(v){
+		set_color(clr);
+		set_class_name();
+		set_name(n);
+		set_image(i);
+	}
+	cone(cone_direction cd, point c, double major, double minor, point v, color clr = no_color, const char* n = "", 
+		#ifdef IMAGE
+			image i = read_rgb_image(""),
+		#endif
+			__attribute__((unused)) cone_type::elliptical_cone* sfinae[std::is_same<type, cone_type::elliptical_cone>::value] = 0)
+		: base(cd, c, major, minor), vertex(v){
+		set_color(clr);
+		set_class_name();
+		set_name(n);
+		set_image(i);
+	}
+	template<typename T, typename unused = void> struct base_type;
+	template<typename unused>
+	struct base_type<cone_type::default_cone, unused>{//circle base in 2d: (x - h)^2 + (y - k)^2 = r^2
+		cone_direction base_direction;
+		point center;
+		double radius;
+		base_type(cone_direction cd, point c, double r) : base_direction(cd), center(c), radius(r){}
+	};
+	template<typename unused>
+	struct base_type<cone_type::elliptical_cone, unused>{//ellipse base in 2d: ((x - h)^2 / (semi_major_axis)^2) + ((y - k)^2 / (semi_minor_axis)^2) = 1
+		cone_direction base_direction;
+		point center;
+		double semi_major_axis, semi_minor_axis;
+		base_type(cone_direction cd, point c, double major, double minor) : base_direction(cd), center(c), semi_major_axis(major), semi_minor_axis(minor){}
+	};
+	base_type<type> base;
+	point vertex;
+	virtual void set_color(const color c){clr = c;}
+    virtual void set_name(const char* str){name = str;}
+	/*
+	virtual void set_class_name(cone_type::default_cone* sfinae[std::is_same<type, cone_type::default_cone>::value] = 0){(void)sfinae; class_name = "cone";}
+	virtual void set_class_name(cone_type::elliptical_cone* sfinae[std::is_same<type, cone_type::elliptical_cone>::value] = 0){(void)sfinae; class_name = "elliptical_cone";}
+	*/
+	#if __cplusplus < 201703L
+	template<typename T, typename unused = void> struct _SPECIALIZE_SET_CLASS_NAME{
+		static void set(const char*&){throw std::runtime_error("not a cone type");}
+	};
+	template<typename unused> struct _SPECIALIZE_SET_CLASS_NAME<cone_type::default_cone, unused>{
+		static void set(const char*& class_name){class_name = "cone"; return;}
+	};
+	template<typename unused> struct _SPECIALIZE_SET_CLASS_NAME<cone_type::elliptical_cone, unused>{
+		static void set(const char*& class_name){class_name = "elliptical_cone"; return;}
+	};
+	#endif
+	virtual void set_class_name() override{
+		#if __cplusplus >= 201703L
+			if constexpr(std::is_same_v<type, cone_type::default_cone>) class_name = "cone";
+			//the last type of cone is likely, as the user has a low chance to input a non-cone type
+			else if constexpr(likely(std::is_same_v<type, cone_type::elliptical_cone>)) class_name = "elliptical_cone";
+			else throw std::runtime_error("not a cone type");
+		#else
+			/*
+			static constexpr bool is_default = std::is_same<type, cone_type::default_cone>::value;
+			if(is_default){class_name = "cone"; return;};
+			static constexpr bool is_elliptical = std::is_same<type, cone_type::elliptical_cone>::value;
+			if(likely(is_elliptical)){class_name = "elliptical_cone"; return;};
+			throw std::runtime_error("not a cone type");
+			*/
+			_SPECIALIZE_SET_CLASS_NAME<type>::set(class_name);
+		#endif
+	}
+	virtual void on_hit(const std::function<void(const vector&, const hit_val&)>& input_function){pressed = input_function;}
+	virtual void translate(const double x, const double y, const double z) override{
+		base.center.x += x;
+		base.center.y += y;
+		base.center.z += z;
+		vertex.x += x;
+		vertex.y += y;
+		vertex.z += z;
+	}
+	virtual void set_rotation(const double y, const double p, const double r){yaw_rad = y, pitch_rad = p, roll_rad = r;}
+	virtual void set_yaw(const double y){yaw_rad = y;}
+	virtual void set_pitch(const double p){pitch_rad = p;}
+	virtual void set_roll(const double r){roll_rad = r;}
+	#if __cplusplus < 201703L
+	template<typename T, typename unused = void> struct _SPECIALIZE_HIT{
+		static hit_val hit(vector){throw std::runtime_error("not a cone type"); return hit_val(false, 0);}
+	};
+	template<typename unused> struct _SPECIALIZE_HIT<cone_type::default_cone, unused>{
+		static hit_val hit(vector u){
+			
+			return hit_val(true, 0);
+		}
+	};
+	template<typename unused> struct _SPECIALIZE_HIT<cone_type::elliptical_cone, unused>{
+		static hit_val hit(vector u){
+			
+			return hit_val(true, 0);
+		}
+	};
+	#endif
+	hit_val hit(vector u/*, cone_type::default_cone* sfinae[std::is_same<type, cone_type::default_cone>::value] = 0*/) const override{
+		/*
+		static point centroid; //todo: find centroid
+		point u_start = -centroid;
+		u_start.rotate(yaw_rad, pitch_rad, roll_rad);
+		u_start += centroid;
+		u.rotate(yaw_rad, pitch_rad, roll_rad);	
+		*/
+		#if __cplusplus >= 201703L
+			if constexpr(std::is_same_v<type, cone_type::default_cone>){
+				//todo: calculate guiding curve
+				//then calculate cone equation
+				//then substitute parametric vector (u_start.x + u.x * t), (u_start.y + u.y * t), (u_start.z + u.z * t) into cone equation
+				//and solve for t
+				
+				return hit_val(true, 0);
+			}
+			if constexpr(likely(std::is_same_v<type, cone_type::elliptical_cone>)){
+				return hit_val(true, 0);
+			}
+			throw std::runtime_error("not a cone type");
+		#else
+			/*
+			static constexpr bool is_default = std::is_same<type, cone_type::default_cone>::value;
+			if(is_default){
+				
+				return hit_val(true, 0);
+			}
+			static constexpr bool is_elliptical = std::is_same<type, cone_type::default_cone>::value;
+			if(likely(is_elliptical)){
 
+				return hit_val(true, 0);
+			}
+			throw std::runtime_error("not a cone type");
+			*/
+			return _SPECIALIZE_HIT<type>::hit(u);
+		#endif
+	}
+	/*
+	hit_val hit(vector u, cone_type::elliptical_cone* sfinae[std::is_same<type, cone_type::elliptical_cone>::value] = 0) const override{
+		
+		return hit_val(true, 0);
+	}
+	*/
+	bool is_in_frustum(const plane_array& plane) const override{
+		(void)plane;
+		return true;
+	}
+};
+typedef cone<cone_type::default_cone> default_cone;
+typedef cone<cone_type::elliptical_cone> elliptical_cone;
+//#else
+//todo: implement for lower than c++17 after cone is fully finished (maybe have it be an option for optimization)
+//template<typename T> struct cone /*: public object{}*/;
+//template<> struct cone<cone_type::default_cone> : public object{}
+//template<> struct cone<cone_type::elliptical_cone : public object{}
+//typedef cone<cone_type::default_cone> default_cone;
+//typedef cone<cone_type::elliptical_cone> elliptical_cone;
+//#endif
 struct doughnut : public object{
     point center;
     double minor_radius, major_radius;
@@ -884,8 +1132,13 @@ struct doughnut : public object{
         center(c), minor_radius(minor_r), major_radius(major_r), /*yaw_rad(yaw), pitch_rad(pitch),*/ epsilon(major_r * major_r - minor_r * minor_r){set_color(cl), set_class_name(), set_name(n); set_yaw(yaw), set_pitch(pitch);}
 	virtual void set_color(const color c){clr = c;}
     virtual void set_name(const char* str){name = str;}
-	virtual void set_class_name(){class_name = "doughnut";}
-	virtual void on_hit(const std::function<void(const vector&)>& input_function){pressed = input_function;}
+	virtual void set_class_name() override{class_name = "doughnut";}
+	virtual void on_hit(const std::function<void(const vector&, const hit_val&)>& input_function){pressed = input_function;}
+	virtual void translate(const double x, const double y, const double z) override{
+		center.x += x;
+		center.y += y;
+		center.z += z;
+	}
 	virtual void set_rotation(const double y, const double p, const double r){yaw_rad = y, pitch_rad = p, roll_rad = r;}
 	virtual void set_yaw(const double y){yaw_rad = y;}
 	virtual void set_pitch(const double p){pitch_rad = p;}
@@ -900,22 +1153,26 @@ struct doughnut : public object{
 			u.z = -sin_yar_x + cos_yar * u.z;
 		}
 		if(pitch_rad){
-			//todo: check if pitch is actually correct (make it so positive always migrates to top instead of going in circles)
+			//todo: check if pitch is actually correct
 			double cos_par = cos(-pitch_rad), sin_par = sin(-pitch_rad), sin_par_y = sin_par * u.y;
 			u.y = cos_par * u.y - sin_par * u.z;
 			u.z = sin_par_y + cos_par * u.z;
 		}
 		#endif
+		point u_origin = -center; //todo: doesnt work either but idk anymore
+		u_origin.rotate_yaw(yaw_rad);
+		u_origin.rotate_pitch(pitch_rad);
+		u_origin += center;
 		u.rotate_yaw(yaw_rad);
 		u.rotate_pitch(pitch_rad);
 		double magnitude;
-		if(!u.is_normalized) magnitude = sqrt(u.x * u.x + u.y * u.y + u.z * u.z);
+		if(!u.is_normalized) magnitude = u.magnitude();//magnitude = sqrt(u.x * u.x + u.y * u.y + u.z * u.z);
 		else magnitude = 1;
 		constexpr double scaler = 1;
 		u.x /= (magnitude * scaler), u.y /= (magnitude * scaler), u.z /= (magnitude * scaler);
 		long double a, b, c, d, e;
         {
-            long double _a = -center.x, _b = u.x, _c = -center.y, _d = u.y, _e = -center.z, _f = u.z;
+            long double _a = /*-center*/u_origin.x, _b = u.x, _c = /*-center*/u_origin.y, _d = u.y, _e = /*-center*/u_origin.z, _f = u.z;
 
             #define simplify_donut
 
@@ -927,6 +1184,7 @@ struct doughnut : public object{
                 e = _a*_a*_a*_a + 2*_a*_a*_c*_c + _c*_c*_c*_c + _e*_e*_e*_e + epsilon*epsilon + 2*_e*_e*_a*_a + 2*_e*_e*_c*_c + 2*epsilon*_a*_a + 2*epsilon*_c*_c + 2*_e*_e*epsilon - 4*major_radius*major_radius*_a*_a - 4*major_radius*major_radius*_c*_c;
             #else
                 a = _b*_b*_b*_b + 2*_b*_b*_d*_d + _d*_d*_d*_d + _f*_f*_f*_f + 2*_b*_b*_f*_f + 2*_d*_d*_f*_f;
+
                 b = 4*_a*_b*_b*_b + 4*_a*_b*_d*_d + 4*_b*_b*_c*_d + 4*_c*_d*_d*_d + 4*_e*_f*_f*_f + 4*_a*_b*_f*_f + 4*_e*_b*_b*_f + 4*_c*_d*_f*_f + 4*_e*_d*_d*_f;
                 c = 6*_a*_a*_b*_b + 2*_a*_a*_d*_d + 8*_a*_b*_c*_d + 2*_b*_b*_c*_c + 6*_c*_c*_d*_d * 6*_e*_e*_f*_f + 2*_a*_a*_f*_f + 8*_e*_a*_b*_f + 2*_e*_e*_b*_b + 2*_c*_c*_f*_f + 8*_e*_c*_d*_f + 2*_e*_e*_d*_d + 2*epsilon*_b*_b + 2*epsilon*_d*_d + 2*epsilon*_f*_f - 4*major_radius*major_radius*_b*_b - 4*major_radius*major_radius*_d*_d;
                 d = 4*_a*_a*_a*_b + 4*_a*_a*_c*_d + 4*_a*_b*_c*_c + 4*_c*_c*_c*_d + 4*_e*_e*_e*_f + 4*_e*_e*_a*_b + 4*_e*_c*_c*_f + 4*_e*_e*_c*_d + 4*epsilon*_a*_b + 4*epsilon*_c*_d + 4*_e*epsilon*_f - 8*major_radius*major_radius*_a*_b - 8*major_radius*major_radius*_c*_d;
@@ -941,18 +1199,24 @@ struct doughnut : public object{
         long double p = 8 * c - 3 * b * b;
         long double g = 64 * e - 16 * c * c + 16 * b * b * c - 16 * b * d - 3 * b * b * b * b;
         //todo: find the distance instead of just putting 100
-        if(discriminant < 0){pressed(u); return /*std::pair<bool, double>*/ hit_val(true, 100);}
+		hit_val h;
+		h.second = 100;
+        if(discriminant < 0){pressed(u, h); h.first = true; return /*std::pair<bool, double>*/ /*hit_val(true, 100);*/ h;}
         if(!discriminant){
 			bool hit_doughnut = !(!g && p > 0 && b * b * b + 8 * d - 4 * b * c);
-			if(hit_doughnut) pressed(u);
-			return hit_val(hit_doughnut, 100);
+			h.first = hit_doughnut;
+			if(hit_doughnut) pressed(u, h);
+			//return hit_val(hit_doughnut, 100);
+			return h;
 			//return /*std::pair<bool, double>*/ hit_val(!(!g && p > 0 && b * b * b + 8 * d - 4 * b * c), 100);
 		}
 		//if(discriminant > 0)
         //return std::pair<bool, double>(!(p > 0 || g > 0), 100);
 		bool hit_doughnut = p < 0 && g < 0;
-       	if(hit_doughnut) pressed(u);
-		return hit_val(hit_doughnut, 100);
+       	if(hit_doughnut) pressed(u, h);
+		h.first = hit_doughnut;
+		return h;
+		//return hit_val(hit_doughnut, 100);
 		//return /*std::pair<bool, double>*/ hit_val(p < 0 && g < 0, 100);
     }
     bool is_in_frustum(const plane_array& plane) const override{
@@ -962,56 +1226,11 @@ struct doughnut : public object{
 private:
     double epsilon;
 };
-#if 0
-#ifndef IMAGE
-sphere s(RGB(0, 0, 255), sqrt(100000), point(100, 41.5, 2000), "the big red sphere");
-#else
-sphere s(no_color, sqrt(100000), point(0, 50, 2000), "the big blue earth", read_rgb_image("images/earth.bmp"));
-#endif
-//doughnut d(RGB(0, 255, 0), 200, 300, point(100, 100, 5000));
-doughnut d(RGB(255, 0, 255), 90, 1500, point(0, 0, 0), "the laggy doughnut", 1.57, 1);
-#ifndef IMAGE
-point p1(-250, -300, 2400), p2(250, 200, 1500), p3(350, -100, 1000)
-#ifdef QUAD
-    , p4(-250, -100, 2000)
-#endif
-;
-#else
-point p1(-350, -165, 2400), p2(350, -165, 2400), p3(0, /*-1000*/-1400, 2400)
-#ifdef QUAD
-	, p4(0, 1000, 24000)
-#endif
-;
-#endif
-polygon p(
-#ifndef IMAGE
-RGB(0, 255, 0)
-#else
-no_color
-#endif
-,
-#ifdef QUAD
-"the funny quadrilateral"
-#else
-"the funny triangle"
-#endif
-#ifdef IMAGE
-, read_rgb_image("images/cone.bmp")
-#endif
-, p1, p2, p3
-#ifdef QUAD
-    , p4
-#endif
-);
-std::vector<object_pointer> world = {&s, &p
-#ifdef NO_DOUGHNUT
-	};
-#else
-, &d};
-#endif
-#endif
 std::vector<std::unique_ptr<object>> world;
-constexpr double convert_horizontal_fov_to_radians = //maybe just make it a bool and ternary the 0.0175 in calculating for z
+void translate_world(const double x, const double y, const double z){
+	for(auto& i : world) i->translate(x, y, z);
+}
+constexpr double convert_horizontal_fov_to_radians = //todo: maybe just make it a bool and ternary the 0.0175 in calculating for z
 #ifdef in_radians
 //1 / 0.0175 //to cancel out the 0.0175
 1
@@ -1029,6 +1248,14 @@ public:
     ~lambda_destructor(){lambda = after;}
 };
 plane_setup_type plane_setup;
+//todo: make an option where the edges of shapes are not smoothened, if a pixel hit go back and see where it hit
+#ifdef SMOOTHEN
+	//todo: create an option for vertical smoothing
+	#ifndef SMOOTHEN_AMOUNT
+		#define SMOOTHEN_AMOUNT 2
+	#endif
+	static_assert(SMOOTHEN_AMOUNT > 0, "smoothen amount must be greater than 0");
+#endif
 std::function<void()> render =
 [](){
 	++framerate;
@@ -1037,7 +1264,7 @@ std::function<void()> render =
 	
 	static bool yaw_rotated = 0;
 	static double yaw_total = 0;
-	constexpr int object_num_lower_bound = 0, object_num_upper_bound = 1; //inclusive not exclusive
+	constexpr int object_num_lower_bound = 0, object_num_upper_bound = 0; //inclusive not exclusive
 	if(!yaw_rotated){
 		yaw_total += 0.0523599;
 		for(int object_num = object_num_lower_bound; object_num <= object_num_upper_bound; ++object_num)
@@ -1060,7 +1287,6 @@ std::function<void()> render =
     //for clicks and stuff
     plane_setup_type create_plane = [](std::vector<object_pointer>& can_hit, plane_array& plane, bool& ypr){
         //can_hit = world; // copy
-		//this is where segfault
 		if(can_hit.size() != world.size()) can_hit.resize(world.size());
 		for(int i = 0; i < (int)world.size(); ++i)
 			can_hit[i] = &*world[i];
@@ -1082,7 +1308,7 @@ std::function<void()> render =
     				i.z = -sin_yar_x + cos_yar * i.z;
     			}
     			if(pitch_angle_radians){
-    				//todo: check if pitch is actually correct (make it so positive always migrates to top instead of going in circles)
+    				//todo: check if pitch is actually correct
     				double cos_par = cos(pitch_angle_radians), sin_par = sin(pitch_angle_radians), sin_par_y = sin_par * i.y;
     				i.y = cos_par * i.y - sin_par * i.z;
     				i.z = sin_par_y + cos_par * i.z;
@@ -1103,18 +1329,20 @@ std::function<void()> render =
     	//todo: i guess change vector(0, -1, 0) to the correct vector for all pitch_angle_radians too (up and down)
     	// fabricate a back side
 		//todo: make the backside the computer screen
-    	vector left_vector = bounding[0] - bounding[1], // vector pointing left from top right to top left
-    		   projection = left_vector * (dot_product(bounding[0], left_vector) / dot_product(left_vector, left_vector)); // point on back side
+    	//vector left_vector = bounding[0] - bounding[1], // vector pointing left from top right to top left
+    	//	   projection = left_vector * (dot_product(bounding[0], left_vector) / dot_product(left_vector, left_vector)); // point on back side
     
+		//todo: potential issue, negative pitch rising the frustum?
         plane = {
             {bounding[0], bounding[2], point(0, 0, 0)}, //left
     		{bounding[3], bounding[1], point(0, 0, 0)}, //right
     		{bounding[1], bounding[0], point(0, 0, 0)}, //top
             //{bounding[2], bounding[3], point(0, 0, 0)}, //bottom
-			{bounding[3], bounding[2], bounding[3] * 2}, //bottom
-    		{point(0, 0, 0), projection, point(0, -1, 0) /*fix*/}, //back test	
+			{bounding[3], bounding[2], bounding[3] * 2}, //todo: fix bottom
+    		//{point(0, 0, 0), projection, point(0, -1, 0) /*fix*/}, //back test	
     		//todo: maybe add front plane
         };
+
     	#if __cplusplus >= 202002L
             std::erase_if(can_hit, [&plane](object_pointer i){return !i->is_in_frustum(plane);});
         #else
@@ -1132,12 +1360,30 @@ std::function<void()> render =
 		//todo: start with a unit vector, and rotate it by the angle amount in either radians or degrees (fov / width_px) or something every time you move one pixel right
 		vector start = plane[0][0]; //start at top left
 		vector row_inc = (plane[2][0] - plane[2][1]) / width_px, column_dec = (plane[0][0] - plane[0][1]) / height_px;
+		//std::cout << "row_inc: " << row_inc.x << ' ' << row_inc.y << ' ' << row_inc.z << '\n';
+		//std::cout << "column_dec: " << column_dec.x << ' ' << column_dec.y << ' ' << column_dec.z << '\n';
 		for(int jpx = height_px - 1; jpx >= 0; start -= column_dec, --jpx){
 			double row_vx = start.x, row_vy = start.y, row_vz = start.z;
 			int prev = jpx * width_px;
-			for(int ipx = 0; ipx < width_px; row_vx += row_inc.x, row_vy += row_inc.y, row_vz += row_inc.z, ++ipx){
+			for(int ipx = 0; 
+			#ifndef SMOOTHEN
+				ipx < width_px;
+				row_vx += row_inc.x, row_vy += row_inc.y, row_vz += row_inc.z, 
+				++ipx
+			#else
+				ipx != width_px + SMOOTHEN_AMOUNT - 1;
+				row_vx += SMOOTHEN_AMOUNT * row_inc.x, row_vy += SMOOTHEN_AMOUNT * row_inc.y, row_vz += SMOOTHEN_AMOUNT * row_inc.z,
+				ipx += SMOOTHEN_AMOUNT
+			#endif
+				){
+				#ifdef SMOOTHEN
+					int prev_diff;
+					if(ipx >= width_px) prev_diff = (width_px - 1) - (ipx - SMOOTHEN_AMOUNT), ipx = width_px - 1;
+					else prev_diff = 0;
+				#endif
 				int index = prev + ipx;
 				vector v(row_vx, -row_vy, row_vz);
+				//if(index % 1000) std::cout << v.x << ' ' << v.y << ' ' << v.z << '\n';
 				v.normalize();
 				object* smallest = can_hit[0];
 				/*std::pair<bool, double>*/ hit_val hit_b = smallest->hit(v);
@@ -1166,6 +1412,18 @@ std::function<void()> render =
 				#else
 					framebuf[index] = (hit_b.third != no_color ? hit_b.third : smallest->clr);
 				#endif
+
+				#ifdef SMOOTHEN
+					if(ipx >= SMOOTHEN_AMOUNT){
+						//todo: instead, square values before adding them, divide by 2, then take the square root, ie. avg of red = sqrt((red1^2 + red2^2) / 2)
+						color average = RGB(
+							(GetRValue(framebuf[index]) + GetRValue(framebuf[index - SMOOTHEN_AMOUNT])) / 2,
+							(GetGValue(framebuf[index]) + GetGValue(framebuf[index - SMOOTHEN_AMOUNT])) / 2,
+							(GetBValue(framebuf[index]) + GetBValue(framebuf[index - SMOOTHEN_AMOUNT])) / 2
+						);
+						for(int i = 1, stop = prev_diff ? prev_diff : SMOOTHEN_AMOUNT; i < stop; ++i) framebuf[index - i] = average;
+					}
+				#endif
 			}
 		}
 	}else{
@@ -1173,7 +1431,20 @@ std::function<void()> render =
 		int ipx, jpx = height_px - 1;
 		for(double j = height/*- 1*/; j >= 0 && jpx >= 0; /*--j*/j -= pixel_inc, --jpx){
 			ipx = 0;
-			for(double i = 0; i < width /* 1 */ && ipx < width_px; /*++i*/i += pixel_inc, ++ipx){
+			for(double i = 0; /*i < width*/ /* 1 */ /*&&*/ /*ipx < width_px;*/ /*++i*/
+				#ifndef SMOOTHEN
+				ipx < width_px;
+				i += pixel_inc, ++ipx
+				#else
+				ipx != width_px + SMOOTHEN_AMOUNT - 1;
+				i += SMOOTHEN_AMOUNT * pixel_inc, ipx += SMOOTHEN_AMOUNT
+				#endif
+				){
+				#ifdef SMOOTHEN
+					int prev_diff;
+					if(ipx >= width_px) prev_diff = (width_px - 1) - (ipx - SMOOTHEN_AMOUNT), ipx = width_px - 1;
+					else prev_diff = 0;
+				#endif
 				int index = jpx * width_px + ipx;
 				vector v(-width / 2 + i, height / 2 - j, z);
 				v.normalize();
@@ -1186,9 +1457,9 @@ std::function<void()> render =
 					/*std::pair<bool, double>*/ hit_val hit_a = can_hit[w]->hit(v);
 					//if(small_change) hit_b = smallest->hit(v), small_change = false;
 
-					if(unlikely(hit_a.first)){
+					if(/*unlikely(*/hit_a.first/*)*/){
 						hit_nothing = false;
-						if(unlikely(hit_b.first)){
+						if(/*unlikely(*/hit_b.first/*)*/){
 							if(hit_a.second < hit_b.second)
 								smallest = can_hit[w], hit_b = smallest->hit(v);//small_change = true;
 						}
@@ -1196,13 +1467,26 @@ std::function<void()> render =
 					}
 					else hit_nothing = !hit_b.first;
 				}
-				if(likely(hit_nothing)) framebuf[index] = RGB(255, 255, 255);//RGB(255, 0, 0);
+				if(/*likely(*/hit_nothing/*)*/) framebuf[index] = RGB(255, 255, 255);//RGB(255, 0, 0);
 				else 
 				#ifndef IMAGE
 					framebuf[index] = smallest->clr;
 				#else
 					framebuf[index] = (hit_b.third != no_color ? hit_b.third : smallest->clr);
 				#endif
+				
+				#ifdef SMOOTHEN
+					if(ipx >= SMOOTHEN_AMOUNT){
+						//todo: instead, square values before adding them, divide by 2, then take the square root, ie. avg of red = sqrt((red1^2 + red2^2) / 2)
+						color average = RGB(
+							(GetRValue(framebuf[index]) + GetRValue(framebuf[index - SMOOTHEN_AMOUNT])) / 2,
+							(GetGValue(framebuf[index]) + GetGValue(framebuf[index - SMOOTHEN_AMOUNT])) / 2,
+							(GetBValue(framebuf[index]) + GetBValue(framebuf[index - SMOOTHEN_AMOUNT])) / 2
+						);
+						for(int i = 1, stop = prev_diff ? prev_diff : SMOOTHEN_AMOUNT; i < stop; ++i) framebuf[index - i] = average;
+					}
+				#endif
+
 			}
 		}
 	}
@@ -1271,22 +1555,55 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
             DeleteDC(hdc);
             break;
         }
-        case WM_KEYDOWN:
+        case WM_KEYDOWN:{
+			#ifndef MOVEMENT_AMOUNT
+				#define MOVEMENT_AMOUNT 10
+			#endif
+			static_assert(MOVEMENT_AMOUNT >= 0, "movement amount must be greater or equal to 0");
+			static point camera_center(0, 0, MOVEMENT_AMOUNT), camera_right(MOVEMENT_AMOUNT, 0, 0);
+			//std::cout << "camera_center: " << camera_center.x << ' ' << camera_center.y << ' ' << camera_center.z << '\n';
 			switch(w){
-				case 'W': case VK_UP:
+				/*case 'W':*/ case VK_UP:
 					pitch_angle_radians = pitch_angle_radians + 0.15;
+					camera_center.rotate_pitch(0.15);
+					camera_right.rotate_pitch(0.15);
 					break;
-				case 'S': case VK_DOWN:
+				/*case 'S':*/ case VK_DOWN:
 					pitch_angle_radians = pitch_angle_radians - 0.15;
+					camera_center.rotate_pitch(-0.15);
+					camera_right.rotate_pitch(-0.15);
 					break;
-				case 'A': case VK_LEFT:
+				/*case 'A':*/ case VK_LEFT:
 					yaw_angle_radians = yaw_angle_radians - 0.15;
+					camera_center.rotate_yaw(-0.15);
+					camera_right.rotate_yaw(-0.15);
 					break;
-				case 'D': case VK_RIGHT:
+				/*case 'D':*/ case VK_RIGHT:
 					yaw_angle_radians = yaw_angle_radians + 0.15;
+					camera_center.rotate_yaw(0.15);
+					camera_right.rotate_yaw(0.15);
+					break;
+				case 'W':
+					//todo: change so its moving in the direction of yaw pitch and roll
+					//basically move all shapes the opposite way the camera "moves"
+					//translate_world(0, 0, -MOVEMENT_AMOUNT);
+					//negate y because pitch rotates the other way idk
+					translate_world(-camera_center.x, -(-camera_center.y), -camera_center.z);
+					break;
+				case 'S':
+					//translate_world(0, 0, MOVEMENT_AMOUNT);
+					translate_world(camera_center.x, -(camera_center.y), camera_center.z);
+					break;
+				case 'A':
+					//translate_world(MOVEMENT_AMOUNT, 0, 0);
+					translate_world(camera_right.x, -(camera_right.y), camera_right.z);
+					break;
+				case 'D':
+					translate_world(-camera_right.x, -(-camera_right.y), -camera_right.z);
 					break;
 			}
         	break;
+		}
 		case WM_LBUTTONDOWN:{
 			int x = GET_X_LPARAM(l), y = GET_Y_LPARAM(l);
             std::vector<object_pointer> can_hit;
@@ -1305,6 +1622,7 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
 			}
 			else
 				v = vector(-width / 2 + x * pixel_inc, height / 2 - y * pixel_inc, z);
+			v.normalize();
 			object* smallest = can_hit[0];
 			/*std::pair<bool, double>*/ hit_val hit_b = smallest->hit(v);
 			bool hit_nothing = !hit_b.first;//, small_change = false;
@@ -1331,14 +1649,16 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
 				//strncpy(sound_name, (std::string("sound/") + std::string(smallest->class_name) + std::string(".wav")).c_str(), 256);
 				bool playing = sounds.size();
 				std::string path = std::string("sound/") + std::string(smallest->class_name);
-				for(const auto& file : fs::directory_iterator(path)){
-					//strncpy(sound_name, file.path().string().c_str(), 255);
-					//sounds.emplace_back(std::unique_ptr<char[]>(new char[256]));
-					sounds.emplace_back(std::make_unique<char[]>(256));
-					strncpy(sounds.back().get(), file.path().string().c_str(), 255);
-					//PlaySound(TEXT(sound_name), NULL, SND_FILENAME | SND_ASYNC);
-				}
-				if(!playing) _beginthread(play_sounds, 0, 0);
+				try{
+					for(const auto& file : fs::directory_iterator(path)){
+						//strncpy(sound_name, file.path().string().c_str(), 255);
+						//sounds.emplace_back(std::unique_ptr<char[]>(new char[256]));
+						sounds.emplace_back(std::make_unique<char[]>(256));
+						strncpy(sounds.back().get(), file.path().string().c_str(), 255);
+						//PlaySound(TEXT(sound_name), NULL, SND_FILENAME | SND_ASYNC);
+					}
+					if(!playing) _beginthread(play_sounds, 0, 0);
+				}catch(...){}
 				#endif
 				std::cout << "you clicked on a " << smallest->class_name << " and its name is \'" << smallest->name << "\'!\n";
 			}
@@ -1371,6 +1691,26 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
 	}
 	return 0;
 }
+#define window_loop()\
+{\
+	MSG msg{};\
+	while(GetMessage(&msg, 0, 0, 0)){\
+	    TranslateMessage(&msg);\
+	    DispatchMessage(&msg);\
+	}\
+}
+struct window{
+public:
+	window(const char* name, int width, int height, WNDPROC func){
+		WNDCLASS wc{};
+		wc.lpszClassName = name;
+		wc.hCursor = LoadCursor(0, IDC_ARROW);
+		wc.lpfnWndProc = func;
+		RegisterClass(&wc);
+		int a = width + 16, b = height + 39;
+		CreateWindow(name, name, WS_OVERLAPPEDWINDOW | WS_CAPTION | WS_SYSMENU | WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT, a, b, 0, 0, 0, 0);
+	}
+};
 int main(){
 	//std::ios_base::sync_with_stdio(false);
 	//std::cout.tie(0);
@@ -1393,12 +1733,19 @@ int main(){
 	#else
 	std::unique_ptr<polygon> p = std::make_unique<polygon>(RGB(0, 255, 0), "the funny triangle", p1, p2, p3);
 	#endif
+	#if __cplusplus >= 201703L
+	std::unique_ptr<default_cone> c = std::make_unique<default_cone>(cone_direction::xz, point(0, 0, 2400), 1, point(p3), RGB(255, 0, 0), "ice cream cone");
+	#endif
 	world.emplace_back(std::move(s));
 	#ifndef NO_DOUGHNUT
 	world.emplace_back(std::move(d));
 	#endif
 	world.emplace_back(std::move(p));
+	//#if __cplusplus >= 201703L
+	//world.emplace_back(std::move(c));
+	//#endif
 	_beginthread(fps, 0, 0);
+	/*
 	char name[] = "omg";
 	WNDCLASS wc{};
 	wc.lpszClassName = name;
@@ -1412,4 +1759,7 @@ int main(){
 	    TranslateMessage(&msg);
 	    DispatchMessage(&msg);
 	}
+	*/
+	window w{"ray tracer!!!", width_px, height_px, WindowProcessMessages};
+	window_loop();
 }

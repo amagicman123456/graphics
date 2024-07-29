@@ -22,6 +22,10 @@ x86_64-w64-mingw32-g++ yes.cpp [options] -static -lgdi32 `# [no longer needed: -
 
 options:
 
+* -DSMOOTHEN: smoothen out the pixels, gives better fps too
+
+* -DSMOOTHEN_AMOUNT=[value]: determines how smoothened the pixels are
+
 * -DNO_DOUGHNUT: no doughnut in sight :(
 
 * -Dtri_specialization: use an algorithm specifically for triangles, idk if the performance changes
