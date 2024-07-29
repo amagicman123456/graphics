@@ -4,12 +4,13 @@
 #include <functional>
 #include <algorithm>
 #include <iostream>
+#include <cassert>
 #include <atomic>
 #include <vector>
 #include <cmath>
-#if __cplusplus < 201703L
+//#if __cplusplus < 201703L
 	#define M_PI 3.14159265358979323846
-#endif
+//#endif
 #ifdef SOUND
 	#include <memory>
 	#if __cplusplus >= 201703L
@@ -290,6 +291,7 @@ struct object{
 	image img;
 	#endif
 	virtual void set_name(const char* str){name = str;}
+	virtual void set_class_name() = 0;
 	const char *class_name, *name;
 	double yaw_rad = 0, pitch_rad = 0, roll_rad = 0;
 	//todo: pass in a struct with more details to pressed() like color
@@ -349,7 +351,7 @@ struct sphere : public object{
 	#ifdef IMAGE
 	virtual void set_image(image/*&&*/ i){img = /*std::move(*/i/*)*/;}
 	#endif
-	virtual void set_class_name(){class_name = "sphere";}
+	virtual void set_class_name() override{class_name = "sphere";}
 	virtual void on_hit(const std::function<void(const vector&, const hit_val&)>& input_function){pressed = input_function;}
 	virtual void translate(const double x, const double y, const double z) override{
 		center.x += x;
@@ -527,46 +529,49 @@ struct polygon : public object{
     std::vector<point> points/*{}*/;
 	#ifdef IMAGE
     //polygon(color cl, const char* n, image&& i, auto... l) try : points{(point(l))...}{
-	template<typename ...T> polygon(color cl, const char* n, image/*&&*/ i, T... l) try : points{(point(l))...}{
+	template<typename ...T> polygon(color cl, const char* n, image/*&&*/ i, T... l) /*try*/ : points{(point(l))...}{
+		assert(sizeof...(l) >= 3);
 		set_color(cl);
 		set_class_name();
 		set_name(n);
 		set_image(/*std::move(*/i/*)*/);
-		if(sizeof...(l) < 3) throw;
-	}catch(...){std::cout << "error: number of points to polygon's constructor must be greater than two\n";}
+		//if(sizeof...(l) < 3) throw;
+	}//catch(...){std::cout << "error: number of points to polygon's constructor must be greater than two\n";}
 	#endif
 	//polygon(color cl, const char* n, auto... l) try /*: clr(cl)*/ : points{(point(l))...}{
-    template<typename ...T> polygon(color cl, const char* n, T... l) try /*: clr(cl)*/ : points{(point(l))...}{
+    template<typename ...T> polygon(color cl, const char* n, T... l) /*try : clr(cl)*/ : points{(point(l))...}{
+		assert(sizeof...(l) >= 3);
 		set_color(cl);
 		set_class_name();
 		set_name(n);
 		#ifdef IMAGE
 		set_image(/*std::move(*/read_rgb_image("")/*)*/);
 		#endif
-        if(sizeof...(l) < 3) throw;
+        //if(sizeof...(l) < 3) throw;
         //points = {(point(l))...};
         //a = points[1] - points[0], b = points[2] - points[0], c = cross_product(a, b);
         //k = c.x * points[0].x + c.y * points[1].y + c.z * points[2].z;
-    }catch(...){std::cout << "error: number of points to polygon's constructor must be greater than two\n";}
+    }//catch(...){std::cout << "error: number of points to polygon's constructor must be greater than two\n";}
 	//polygon(color cl, auto... l) try /*: clr(cl)*/ : points{(point(l))...}{
-	template<typename ...T> polygon(color cl, T... l) try /*: clr(cl)*/ : points{(point(l))...}{
-        set_color(cl);
+	template<typename ...T> polygon(color cl, T... l) /*try : clr(cl)*/ : points{(point(l))...}{
+        assert(sizeof...(l) >= 3);
+		set_color(cl);
 		set_class_name();
 		set_name("the default polygon");
         #ifdef IMAGE
 		set_image(/*std::move(*/read_rgb_image("")/*)*/);
 		#endif
-		if(sizeof...(l) < 3) throw;
+		//if(sizeof...(l) < 3) throw;
         //points = {(point(l))...};
         //a = points[1] - points[0], b = points[2] - points[0], c = cross_product(a, b);
         //k = c.x * points[0].x + c.y * points[1].y + c.z * points[2].z;
-    }catch(...){std::cout << "error: number of points to polygon's constructor must be greater than two\n";}
+    }//catch(...){std::cout << "error: number of points to polygon's constructor must be greater than two\n";}
 	virtual void set_color(const color c){clr = c;}
     virtual void set_name(const char* str){name = str;}
 	#ifdef IMAGE
 	virtual void set_image(image/*&&*/ i){img = /*std::move(*/i/*)*/;}
 	#endif
-	virtual void set_class_name(){class_name = "polygon";}
+	virtual void set_class_name() override{class_name = "polygon";}
 	virtual void on_hit(const std::function<void(const vector&, const hit_val&)>& input_function){pressed = input_function;}
 	point calculate_centroid() const{
 		static point centroid;
@@ -952,13 +957,14 @@ enum class cone_direction{
 	xz,
 	yz
 };
+//#if __cplusplus >= 201703L
 template<typename type = cone_type::default_cone>
 struct cone : public object{
 	cone(cone_direction cd, point c, double r, point v, color clr = no_color, const char* n = "", 
 		#ifdef IMAGE
 			image i = read_rgb_image(""),
 		#endif
-			cone_type::default_cone* sfinae[std::is_same<type, cone_type::default_cone>::value] = 0) 
+			__attribute__((unused)) cone_type::default_cone* sfinae[std::is_same<type, cone_type::default_cone>::value] = 0) 
 		: base(cd, c, r), vertex(v){
 		set_color(clr);
 		set_class_name();
@@ -969,7 +975,7 @@ struct cone : public object{
 		#ifdef IMAGE
 			image i = read_rgb_image(""),
 		#endif
-			cone_type::elliptical_cone* sfinae[std::is_same<type, cone_type::elliptical_cone>::value] = 0)
+			__attribute__((unused)) cone_type::elliptical_cone* sfinae[std::is_same<type, cone_type::elliptical_cone>::value] = 0)
 		: base(cd, c, major, minor), vertex(v){
 		set_color(clr);
 		set_class_name();
@@ -995,7 +1001,38 @@ struct cone : public object{
 	point vertex;
 	virtual void set_color(const color c){clr = c;}
     virtual void set_name(const char* str){name = str;}
-	virtual void set_class_name(){class_name = "cone";}
+	/*
+	virtual void set_class_name(cone_type::default_cone* sfinae[std::is_same<type, cone_type::default_cone>::value] = 0){(void)sfinae; class_name = "cone";}
+	virtual void set_class_name(cone_type::elliptical_cone* sfinae[std::is_same<type, cone_type::elliptical_cone>::value] = 0){(void)sfinae; class_name = "elliptical_cone";}
+	*/
+	#if __cplusplus < 201703L
+	template<typename T, typename unused = void> struct _SPECIALIZE_SET_CLASS_NAME{
+		static void set(const char*&){throw std::runtime_error("not a cone type");}
+	};
+	template<typename unused> struct _SPECIALIZE_SET_CLASS_NAME<cone_type::default_cone, unused>{
+		static void set(const char*& class_name){class_name = "cone"; return;}
+	};
+	template<typename unused> struct _SPECIALIZE_SET_CLASS_NAME<cone_type::elliptical_cone, unused>{
+		static void set(const char*& class_name){class_name = "elliptical_cone"; return;}
+	};
+	#endif
+	virtual void set_class_name() override{
+		#if __cplusplus >= 201703L
+			if constexpr(std::is_same_v<type, cone_type::default_cone>) class_name = "cone";
+			//the last type of cone is likely, as the user has a low chance to input a non-cone type
+			else if constexpr(likely(std::is_same_v<type, cone_type::elliptical_cone>)) class_name = "elliptical_cone";
+			else throw std::runtime_error("not a cone type");
+		#else
+			/*
+			static constexpr bool is_default = std::is_same<type, cone_type::default_cone>::value;
+			if(is_default){class_name = "cone"; return;};
+			static constexpr bool is_elliptical = std::is_same<type, cone_type::elliptical_cone>::value;
+			if(likely(is_elliptical)){class_name = "elliptical_cone"; return;};
+			throw std::runtime_error("not a cone type");
+			*/
+			_SPECIALIZE_SET_CLASS_NAME<type>::set(class_name);
+		#endif
+	}
 	virtual void on_hit(const std::function<void(const vector&, const hit_val&)>& input_function){pressed = input_function;}
 	virtual void translate(const double x, const double y, const double z) override{
 		base.center.x += x;
@@ -1009,15 +1046,82 @@ struct cone : public object{
 	virtual void set_yaw(const double y){yaw_rad = y;}
 	virtual void set_pitch(const double p){pitch_rad = p;}
 	virtual void set_roll(const double r){roll_rad = r;}
-	hit_val hit(vector u, cone_type::default_cone* sfinae[std::is_same<type, cone_type::default_cone>::value] = 0) const override{
-		
-		return hit_val(true, 0);
+	#if __cplusplus < 201703L
+	template<typename T, typename unused = void> struct _SPECIALIZE_HIT{
+		static hit_val hit(vector){throw std::runtime_error("not a cone type"); return hit_val(false, 0);}
+	};
+	template<typename unused> struct _SPECIALIZE_HIT<cone_type::default_cone, unused>{
+		static hit_val hit(vector u){
+			
+			return hit_val(true, 0);
+		}
+	};
+	template<typename unused> struct _SPECIALIZE_HIT<cone_type::elliptical_cone, unused>{
+		static hit_val hit(vector u){
+			
+			return hit_val(true, 0);
+		}
+	};
+	#endif
+	hit_val hit(vector u/*, cone_type::default_cone* sfinae[std::is_same<type, cone_type::default_cone>::value] = 0*/) const override{
+		/*
+		static point centroid; //todo: find centroid
+		point u_start = -centroid;
+		u_start.rotate(yaw_rad, pitch_rad, roll_rad);
+		u_start += centroid;
+		u.rotate(yaw_rad, pitch_rad, roll_rad);	
+		*/
+		#if __cplusplus >= 201703L
+			if constexpr(std::is_same_v<type, cone_type::default_cone>){
+				//todo: calculate guiding curve
+				//then calculate cone equation
+				//then substitute parametric vector (u_start.x + u.x * t), (u_start.y + u.y * t), (u_start.z + u.z * t) into cone equation
+				//and solve for t
+				
+				return hit_val(true, 0);
+			}
+			if constexpr(likely(std::is_same_v<type, cone_type::elliptical_cone>)){
+				return hit_val(true, 0);
+			}
+			throw std::runtime_error("not a cone type");
+		#else
+			/*
+			static constexpr bool is_default = std::is_same<type, cone_type::default_cone>::value;
+			if(is_default){
+				
+				return hit_val(true, 0);
+			}
+			static constexpr bool is_elliptical = std::is_same<type, cone_type::default_cone>::value;
+			if(likely(is_elliptical)){
+
+				return hit_val(true, 0);
+			}
+			throw std::runtime_error("not a cone type");
+			*/
+			return _SPECIALIZE_HIT<type>::hit(u);
+		#endif
 	}
+	/*
 	hit_val hit(vector u, cone_type::elliptical_cone* sfinae[std::is_same<type, cone_type::elliptical_cone>::value] = 0) const override{
 		
 		return hit_val(true, 0);
 	}
+	*/
+	bool is_in_frustum(const plane_array& plane) const override{
+		(void)plane;
+		return true;
+	}
 };
+typedef cone<cone_type::default_cone> default_cone;
+typedef cone<cone_type::elliptical_cone> elliptical_cone;
+//#else
+//todo: implement for lower than c++17 after cone is fully finished (maybe have it be an option for optimization)
+//template<typename T> struct cone /*: public object{}*/;
+//template<> struct cone<cone_type::default_cone> : public object{}
+//template<> struct cone<cone_type::elliptical_cone : public object{}
+//typedef cone<cone_type::default_cone> default_cone;
+//typedef cone<cone_type::elliptical_cone> elliptical_cone;
+//#endif
 struct doughnut : public object{
     point center;
     double minor_radius, major_radius;
@@ -1028,7 +1132,7 @@ struct doughnut : public object{
         center(c), minor_radius(minor_r), major_radius(major_r), /*yaw_rad(yaw), pitch_rad(pitch),*/ epsilon(major_r * major_r - minor_r * minor_r){set_color(cl), set_class_name(), set_name(n); set_yaw(yaw), set_pitch(pitch);}
 	virtual void set_color(const color c){clr = c;}
     virtual void set_name(const char* str){name = str;}
-	virtual void set_class_name(){class_name = "doughnut";}
+	virtual void set_class_name() override{class_name = "doughnut";}
 	virtual void on_hit(const std::function<void(const vector&, const hit_val&)>& input_function){pressed = input_function;}
 	virtual void translate(const double x, const double y, const double z) override{
 		center.x += x;
@@ -1055,6 +1159,10 @@ struct doughnut : public object{
 			u.z = sin_par_y + cos_par * u.z;
 		}
 		#endif
+		point u_origin = -center; //todo: doesnt work either but idk anymore
+		u_origin.rotate_yaw(yaw_rad);
+		u_origin.rotate_pitch(pitch_rad);
+		u_origin += center;
 		u.rotate_yaw(yaw_rad);
 		u.rotate_pitch(pitch_rad);
 		double magnitude;
@@ -1064,7 +1172,7 @@ struct doughnut : public object{
 		u.x /= (magnitude * scaler), u.y /= (magnitude * scaler), u.z /= (magnitude * scaler);
 		long double a, b, c, d, e;
         {
-            long double _a = -center.x, _b = u.x, _c = -center.y, _d = u.y, _e = -center.z, _f = u.z;
+            long double _a = /*-center*/u_origin.x, _b = u.x, _c = /*-center*/u_origin.y, _d = u.y, _e = /*-center*/u_origin.z, _f = u.z;
 
             #define simplify_donut
 
@@ -1076,6 +1184,7 @@ struct doughnut : public object{
                 e = _a*_a*_a*_a + 2*_a*_a*_c*_c + _c*_c*_c*_c + _e*_e*_e*_e + epsilon*epsilon + 2*_e*_e*_a*_a + 2*_e*_e*_c*_c + 2*epsilon*_a*_a + 2*epsilon*_c*_c + 2*_e*_e*epsilon - 4*major_radius*major_radius*_a*_a - 4*major_radius*major_radius*_c*_c;
             #else
                 a = _b*_b*_b*_b + 2*_b*_b*_d*_d + _d*_d*_d*_d + _f*_f*_f*_f + 2*_b*_b*_f*_f + 2*_d*_d*_f*_f;
+
                 b = 4*_a*_b*_b*_b + 4*_a*_b*_d*_d + 4*_b*_b*_c*_d + 4*_c*_d*_d*_d + 4*_e*_f*_f*_f + 4*_a*_b*_f*_f + 4*_e*_b*_b*_f + 4*_c*_d*_f*_f + 4*_e*_d*_d*_f;
                 c = 6*_a*_a*_b*_b + 2*_a*_a*_d*_d + 8*_a*_b*_c*_d + 2*_b*_b*_c*_c + 6*_c*_c*_d*_d * 6*_e*_e*_f*_f + 2*_a*_a*_f*_f + 8*_e*_a*_b*_f + 2*_e*_e*_b*_b + 2*_c*_c*_f*_f + 8*_e*_c*_d*_f + 2*_e*_e*_d*_d + 2*epsilon*_b*_b + 2*epsilon*_d*_d + 2*epsilon*_f*_f - 4*major_radius*major_radius*_b*_b - 4*major_radius*major_radius*_d*_d;
                 d = 4*_a*_a*_a*_b + 4*_a*_a*_c*_d + 4*_a*_b*_c*_c + 4*_c*_c*_c*_d + 4*_e*_e*_e*_f + 4*_e*_e*_a*_b + 4*_e*_c*_c*_f + 4*_e*_e*_c*_d + 4*epsilon*_a*_b + 4*epsilon*_c*_d + 4*_e*epsilon*_f - 8*major_radius*major_radius*_a*_b - 8*major_radius*major_radius*_c*_d;
@@ -1089,7 +1198,7 @@ struct doughnut : public object{
         long double discriminant = 256 * e * e * e - 192 * b * d * e * e - 128 * c * c * e * e + 144 * c * d * d * e - 27 * d * d * d *d + 144 * b * b * c * e * e - 6 * b * b * d * d * e - 80 * b * c * c * d * e + 18 * b * c * d * d * d + 16 * c * c * c * c * e - 4 * c * c * c * d * d - 27 * b * b * b * b * e * e + 18 * b * b * b * c * d * e - 4 * b * b * b * d * d * d - 4 * b * b * c * c * c * e + b * b * c * c * d * d;
         long double p = 8 * c - 3 * b * b;
         long double g = 64 * e - 16 * c * c + 16 * b * b * c - 16 * b * d - 3 * b * b * b * b;
-        //todo: find the distance instead of just putting 100i
+        //todo: find the distance instead of just putting 100
 		hit_val h;
 		h.second = 100;
         if(discriminant < 0){pressed(u, h); h.first = true; return /*std::pair<bool, double>*/ /*hit_val(true, 100);*/ h;}
@@ -1540,14 +1649,16 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
 				//strncpy(sound_name, (std::string("sound/") + std::string(smallest->class_name) + std::string(".wav")).c_str(), 256);
 				bool playing = sounds.size();
 				std::string path = std::string("sound/") + std::string(smallest->class_name);
-				for(const auto& file : fs::directory_iterator(path)){
-					//strncpy(sound_name, file.path().string().c_str(), 255);
-					//sounds.emplace_back(std::unique_ptr<char[]>(new char[256]));
-					sounds.emplace_back(std::make_unique<char[]>(256));
-					strncpy(sounds.back().get(), file.path().string().c_str(), 255);
-					//PlaySound(TEXT(sound_name), NULL, SND_FILENAME | SND_ASYNC);
-				}
-				if(!playing) _beginthread(play_sounds, 0, 0);
+				try{
+					for(const auto& file : fs::directory_iterator(path)){
+						//strncpy(sound_name, file.path().string().c_str(), 255);
+						//sounds.emplace_back(std::unique_ptr<char[]>(new char[256]));
+						sounds.emplace_back(std::make_unique<char[]>(256));
+						strncpy(sounds.back().get(), file.path().string().c_str(), 255);
+						//PlaySound(TEXT(sound_name), NULL, SND_FILENAME | SND_ASYNC);
+					}
+					if(!playing) _beginthread(play_sounds, 0, 0);
+				}catch(...){}
 				#endif
 				std::cout << "you clicked on a " << smallest->class_name << " and its name is \'" << smallest->name << "\'!\n";
 			}
@@ -1622,11 +1733,17 @@ int main(){
 	#else
 	std::unique_ptr<polygon> p = std::make_unique<polygon>(RGB(0, 255, 0), "the funny triangle", p1, p2, p3);
 	#endif
+	#if __cplusplus >= 201703L
+	std::unique_ptr<default_cone> c = std::make_unique<default_cone>(cone_direction::xz, point(0, 0, 2400), 1, point(p3), RGB(255, 0, 0), "ice cream cone");
+	#endif
 	world.emplace_back(std::move(s));
 	#ifndef NO_DOUGHNUT
 	world.emplace_back(std::move(d));
 	#endif
 	world.emplace_back(std::move(p));
+	//#if __cplusplus >= 201703L
+	//world.emplace_back(std::move(c));
+	//#endif
 	_beginthread(fps, 0, 0);
 	/*
 	char name[] = "omg";
