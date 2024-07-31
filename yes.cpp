@@ -116,71 +116,79 @@ image read_rgb_image(const char* const path){
 #define likely(x) __builtin_expect(!!(x), 1)
 #define unlikely(x) __builtin_expect(!!(x), 0)
 std::atomic<int> framerate(0);
-std::atomic<double> yaw_angle_radians(0);
-std::atomic<double> pitch_angle_radians(0);
-std::atomic<double> roll_angle_radians(0);
+/*std::atomic<*/double/*>*/ yaw_angle_radians(0);
+/*std::atomic<*/double/*>*/ pitch_angle_radians(0);
+/*std::atomic<*/double/*>*/ roll_angle_radians(0);
 void fps(void*){
-    while(1){
-        Sleep(1000);
-        std::cout << framerate << '\n';
-        framerate = 0;
-    }
+	while(1){
+		Sleep(1000);
+		std::cout << framerate << '\n';
+		framerate = 0;
+	}
 }
 int width_px = 1200, height_px = 600;//, tick_count;
 uint32_t *framebuf;
 double width = 1, height = height_px / (double)width_px,
-       pixel_inc = width / width_px;
+	   pixel_inc = width / width_px;
 #ifndef horizontal_fov
 	#define horizontal_fov 90
 #endif
 double /*horizontal_fov = 90,*/ vertical_fov = atan(tan(height_px / 2.0) * height_px / (double)width_px);
 inline double square(const double x){
-    return x * x;
+	return x * x;
 }
 inline double greater(const double a, const double b){
-    return a > b ? a : b;
+	return a > b ? a : b;
 }
 inline double abs_val(const double a){
-    return a < 0 ? -a : a;
+	return a < 0 ? -a : a;
 }
 struct point{
-    double x, y, z;
+	double x, y, z;
 	bool is_normalized = 0;
-    point() : x(0), y(0), z(0){}
-    point(double e, double f, double g) : x(e), y(f), z(g){}
+	point() : x(0), y(0), z(0){}
+	point(double e, double f, double g) : x(e), y(f), z(g){}
 	double magnitude_squared() const{
 		return x * x + y * y + z * z;
 	}
 	double magnitude() const{
-		return sqrt(this->magnitude_squared());
+		const double ms = this->magnitude_squared();
+		assert(ms >= 0);
+		//return sqrt(this->magnitude_squared());
+		return sqrt(ms);
 	}
-	void set_normalized(const bool a){is_normalized = a;}
+	//void set_normalized(const bool a){is_normalized = a;}
 	void normalize(){
-		set_normalized(true);
+		//set_normalized(true);
 		const double magnitude = this->magnitude();
+		assert(magnitude != 0);
 		this->x /= magnitude, this->y /= magnitude, this->z /= magnitude;
+	}
+	void set_normalize(){
+		is_normalized = true;
+		this->normalize();
 	}
 	inline point operator-() const{
 		return point(-x, -y, -z);
 	}
-    inline point operator-(const point& f) const{
-        return point(x - f.x, y - f.y, z - f.z);
-    }
-    inline point& operator-=(const point& g){
-        x -= g.x;
-        y -= g.y;
-        z -= g.z;
-        return *this;
-    }
+	inline point operator-(const point& f) const{
+		return point(x - f.x, y - f.y, z - f.z);
+	}
+	inline point& operator-=(const point& g){
+		x -= g.x;
+		y -= g.y;
+		z -= g.z;
+		return *this;
+	}
 	inline point& operator+=(const point& o){
 		x += o.x;
 		y += o.y;
 		z += o.z;
 		return *this;
 	}
-    inline point operator*(const double h) const{
-        return point(x * h, y * h, z * h);
-    }
+	inline point operator*(const double h) const{
+		return point(x * h, y * h, z * h);
+	}
 	inline point operator/(const double i) const{
 		return point(x / i, y / i, z / i);
 	}
@@ -266,14 +274,15 @@ struct point{
 typedef uint32_t color;
 typedef point vector;
 inline vector cross_product(const vector& a, const vector& b){
-    return vector(a.y * b.z - b.y * a.z, a.z * b.x - b.z * a.x, a.x * b.y - b.x * a.y);
+	return vector(a.y * b.z - b.y * a.z, a.z * b.x - b.z * a.x, a.x * b.y - b.x * a.y);
 }
 inline double dot_product(const vector& a, const vector& b){
-    return a.x * b.x + a.y * b.y + a.z * b.z;
+	return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 typedef std::vector<point> plane;
 typedef std::vector<plane> plane_array;
 #define no_color 4278190080 //the unused byte
+const color background = RGB(255, 255, 255);
 struct hit_val{
 	bool first;
 	double second;
@@ -282,12 +291,12 @@ struct hit_val{
 	hit_val(bool b, double d, color c = no_color) : first(b), second(d), third(c){}
 };
 struct object{
-    virtual /*std::pair<bool, double>*/ hit_val hit(vector u) const = 0;
-    virtual bool is_in_frustum(const plane_array& plane) const = 0;
-    virtual void set_color(const color c){clr = c;}
-    color clr;
+	virtual /*std::pair<bool, double>*/ hit_val hit(vector u) const = 0;
+	virtual bool is_in_frustum(const plane_array& plane) const = 0;
+	virtual void set_color(const color c){clr = c;}
+	color clr;
 	#ifdef IMAGE
-	virtual void set_image(image/*&&*/ i){img = /*std::move(*/i/*)*/;}
+	virtual void set_image(const image/*&&*/ i){img = /*std::move(*/i/*)*/;}
 	image img;
 	#endif
 	virtual void set_name(const char* str){name = str;}
@@ -321,17 +330,18 @@ bool on_plane_normal_side(const plane& bound, const point& p){
 */
 double plane_distance(const plane& bound, const point& p){ 
 	vector a = bound[1] - bound[0], b = bound[2] - bound[0], cross = cross_product(a, b);
-	double cross_mag = cross.magnitude();//sqrt(cross.x * cross.x + cross.y * cross.y + cross.z * cross.z);
-	cross.x /= cross_mag, cross.y /= cross_mag, cross.z /= cross_mag;
+	//double cross_mag = cross.magnitude();//sqrt(cross.x * cross.x + cross.y * cross.y + cross.z * cross.z);
+	//cross.x /= cross_mag, cross.y /= cross_mag, cross.z /= cross_mag;
+	cross.normalize();
 	return dot_product(cross, p);
 }
 struct sphere : public object{
-    double radius;
-    point center;
+	double radius;
+	point center;
 	//#ifdef IMAGE
 	//double image_yaw_rad, image_pitch_rad, image_roll_rad;
 	//#endif
-    sphere(color cl, double r, point c, const char* n = "the default sphere"
+	sphere(color cl, double r, point c, const char* n = "the default sphere"
 	#ifdef IMAGE
 	, image/*&&*/ i = read_rgb_image(""), double yr = 0, double pr = 0, double rr = 0
 	#endif 
@@ -346,11 +356,11 @@ struct sphere : public object{
 	#endif
 	;
 	}
-    virtual void set_color(const color c){clr = c;}
-	virtual void set_name(const char* str){name = str;}
+	virtual void set_color(const color c){clr = c;}
 	#ifdef IMAGE
-	virtual void set_image(image/*&&*/ i){img = /*std::move(*/i/*)*/;}
+	virtual void set_image(const image/*&&*/ i){img = /*std::move(*/i/*)*/;}
 	#endif
+	virtual void set_name(const char* str){name = str;}
 	virtual void set_class_name() override{class_name = "sphere";}
 	virtual void on_hit(const std::function<void(const vector&, const hit_val&)>& input_function){pressed = input_function;}
 	virtual void translate(const double x, const double y, const double z) override{
@@ -363,27 +373,28 @@ struct sphere : public object{
 	virtual void set_pitch(const double p){pitch_rad = p;}
 	virtual void set_roll(const double r){roll_rad = r;}
 	/*std::pair<bool, double>*/ hit_val hit(vector u) const override{
-        //todo: do the same thing for u.x and u.y
+		//todo: do the same thing for u.x and u.y
 		//if((u.z > 0 && center.z < radius) || (u.z < 0 && center.z > radius)) return /*std::pair<bool, double>*/ hit_val(false, 0);
 		/*	
-        double magnitude_squared = u.x * u.x + u.y * u.y + u.z * u.z;
-        //double dot = dot_product(u.x, u.y, u.z, center.x, center.y, center.z);
+		double magnitude_squared = u.x * u.x + u.y * u.y + u.z * u.z;
+		//double dot = dot_product(u.x, u.y, u.z, center.x, center.y, center.z);
 		double dot = dot_product(u, -center);
 		double determinant = dot * dot - magnitude_squared * (center.x * center.x + center.y * center.y + center.z * center.z - radius * radius);
-        // if determinant < 0 you can't sqrt it
-        if(determinant < 0) return std::pair<bool, double>(false, 0);
+		// if determinant < 0 you can't sqrt it
+		if(determinant < 0) return std::pair<bool, double>(false, 0);
 		//std::cout << (-dot + sqrt(determinant)) / magnitude_squared << '\n';
 		//todo: provide correct distance
 		//std::cout << "-dot: " << -dot << "\n-sqrt determinant: " << -sqrt(determinant) << "\nmagnitude squared: " << magnitude_squared << '\n';
-        return std::pair<bool, double>(true, (-dot - sqrt(determinant)) / magnitude_squared);
+		return std::pair<bool, double>(true, (-dot - sqrt(determinant)) / magnitude_squared);
 		*/
 		//todo: its the correct difference but normalizing requires a sqrt
 		#if 1
-		if(!u.is_normalized){
+		if(!u.is_normalized)//{
 			//double magnitude = sqrt(u.x * u.x + u.y * u.y + u.z * u.z);
-			double magnitude = u.magnitude();
-			u.x /= magnitude, u.y /= magnitude, u.z /= magnitude;
-		}
+			//double magnitude = u.magnitude();
+			//u.x /= magnitude, u.y /= magnitude, u.z /= magnitude;
+			u.normalize();
+		//}
 		double dot = dot_product(u, -center);
 		double determinant = dot * dot - (center.x * center.x + center.y * center.y + center.z * center.z - radius * radius);
 		#else
@@ -428,8 +439,9 @@ struct sphere : public object{
 		}
 		#endif
 		//double hit_spot_magnitude = sqrt(hit_spot.x * hit_spot.x + hit_spot.y * hit_spot.y + hit_spot.z * hit_spot.z);
-		double hit_spot_magnitude = hit_spot.magnitude();
-		hit_spot.x /= hit_spot_magnitude, hit_spot.y /= hit_spot_magnitude, hit_spot.z /= hit_spot_magnitude;
+		//double hit_spot_magnitude = hit_spot.magnitude();
+		//hit_spot.x /= hit_spot_magnitude, hit_spot.y /= hit_spot_magnitude, hit_spot.z /= hit_spot_magnitude;
+		hit_spot.normalize();
 		{
 			double u = 0.5 + atan2(hit_spot.z, hit_spot.x) / (2 * M_PI);
 			double v = 0.5 + asin(hit_spot.y) / M_PI;
@@ -441,7 +453,7 @@ struct sphere : public object{
 		}
 		#endif
 	}
-    bool is_in_frustum(const plane_array& plane) const override{
+	bool is_in_frustum(const plane_array& plane) const override{
 		#if 0
 		//todo: i guess change vector(0, -1, 0) to the correct vector for all pitch_angle_radians too (up and down)
 		// fabricate a back side
@@ -449,30 +461,30 @@ struct sphere : public object{
 			   projection = left_vector * (dot_product(plane[2][1], left_vector) / dot_product(left_vector, left_vector)), // point on back side
 			   plane_normal = cross_product(left_vector /* should it be projection? */, vector(0, -1, 0)); // calculate normal facing back
 		//double plane_normal_mag = sqrt(plane_normal.x * plane_normal.x + plane_normal.y * plane_normal.y + plane_normal.z * plane_normal.z);
-        //plane_normal.x /= plane_normal_mag, plane_normal.y /= plane_normal_mag, plane_normal.z /= plane_normal_mag;
+		//plane_normal.x /= plane_normal_mag, plane_normal.y /= plane_normal_mag, plane_normal.z /= plane_normal_mag;
 		double distance = dot_product(plane_normal, center);
 		//todo: might not be exactly when its on the other side idk
 		if(distance > 0){std::cout << "nah fam\n"; return false;}
 		#endif
 		#if 0
 		for(/*int c = 0; c < (int)plane.size(); ++c*/ std::vector<point>& bound : plane){
-            vector a = bound/*plane[c]*/[1] - bound/*plane[c]*/[0], b = bound/*plane[c]*/[2] - bound/*plane[c]*/[0], cross = cross_product(a, b);
+			vector a = bound/*plane[c]*/[1] - bound/*plane[c]*/[0], b = bound/*plane[c]*/[2] - bound/*plane[c]*/[0], cross = cross_product(a, b);
 
-            double cross_mag = sqrt(cross.x * cross.x + cross.y * cross.y + cross.z * cross.z);
-            cross.x /= cross_mag, cross.y /= cross_mag, cross.z /= cross_mag;
+			double cross_mag = sqrt(cross.x * cross.x + cross.y * cross.y + cross.z * cross.z);
+			cross.x /= cross_mag, cross.y /= cross_mag, cross.z /= cross_mag;
 
-            //if its positive its facing the same direction as the cross product
-            //if its negative its facing the opposite
+			//if its positive its facing the same direction as the cross product
+			//if its negative its facing the opposite
 
 			double distance = dot_product(cross, center);
-            if(abs_val(distance) < radius){/*std::cout << "tru moo: " << distance << '\n';*/ return true;}
-        }
+			if(abs_val(distance) < radius){/*std::cout << "tru moo: " << distance << '\n';*/ return true;}
+		}
 		
-        return false;
+		return false;
 		#else
-    	//todo: fix returning true when sphere isnt in frustum 
-        //corner case: sphere with distance less than radius / sqrt(2) or radius * 0.707106871 to (top or bottom) and (left or right) and vise versa ex. near bottom and left is bottom-left
-        //middle case: sphere near a side and is bounded by its two adjacent sides ex. sphere near bottom and bounded by left and right
+		//todo: fix returning true when sphere isnt in frustum 
+		//corner case: sphere with distance less than radius / sqrt(2) or radius * 0.707106871 to (top or bottom) and (left or right) and vise versa ex. near bottom and left is bottom-left
+		//middle case: sphere near a side and is bounded by its two adjacent sides ex. sphere near bottom and bounded by left and right
 		//assuming plane[0] is left, plane[1] is right, plane[2] is top, plane[3] is bottom
 		double left_distance = plane_distance(plane[0], center), right_distance = plane_distance(plane[1], center),
 			   top_distance = plane_distance(plane[2], center), bottom_distance = plane_distance(plane[3], center);
@@ -526,9 +538,9 @@ struct sphere : public object{
 	}
 };
 struct polygon : public object{
-    std::vector<point> points/*{}*/;
+	std::vector<point> points/*{}*/;
 	#ifdef IMAGE
-    //polygon(color cl, const char* n, image&& i, auto... l) try : points{(point(l))...}{
+	//polygon(color cl, const char* n, image&& i, auto... l) try : points{(point(l))...}{
 	template<typename ...T> polygon(color cl, const char* n, image/*&&*/ i, T... l) /*try*/ : points{(point(l))...}{
 		assert(sizeof...(l) >= 3);
 		set_color(cl);
@@ -539,7 +551,7 @@ struct polygon : public object{
 	}//catch(...){std::cout << "error: number of points to polygon's constructor must be greater than two\n";}
 	#endif
 	//polygon(color cl, const char* n, auto... l) try /*: clr(cl)*/ : points{(point(l))...}{
-    template<typename ...T> polygon(color cl, const char* n, T... l) /*try : clr(cl)*/ : points{(point(l))...}{
+	template<typename ...T> polygon(color cl, const char* n, T... l) /*try : clr(cl)*/ : points{(point(l))...}{
 		assert(sizeof...(l) >= 3);
 		set_color(cl);
 		set_class_name();
@@ -547,30 +559,30 @@ struct polygon : public object{
 		#ifdef IMAGE
 		set_image(/*std::move(*/read_rgb_image("")/*)*/);
 		#endif
-        //if(sizeof...(l) < 3) throw;
-        //points = {(point(l))...};
-        //a = points[1] - points[0], b = points[2] - points[0], c = cross_product(a, b);
-        //k = c.x * points[0].x + c.y * points[1].y + c.z * points[2].z;
-    }//catch(...){std::cout << "error: number of points to polygon's constructor must be greater than two\n";}
+		//if(sizeof...(l) < 3) throw;
+		//points = {(point(l))...};
+		//a = points[1] - points[0], b = points[2] - points[0], c = cross_product(a, b);
+		//k = c.x * points[0].x + c.y * points[1].y + c.z * points[2].z;
+	}//catch(...){std::cout << "error: number of points to polygon's constructor must be greater than two\n";}
 	//polygon(color cl, auto... l) try /*: clr(cl)*/ : points{(point(l))...}{
 	template<typename ...T> polygon(color cl, T... l) /*try : clr(cl)*/ : points{(point(l))...}{
-        assert(sizeof...(l) >= 3);
+		assert(sizeof...(l) >= 3);
 		set_color(cl);
 		set_class_name();
 		set_name("the default polygon");
-        #ifdef IMAGE
+		#ifdef IMAGE
 		set_image(/*std::move(*/read_rgb_image("")/*)*/);
 		#endif
 		//if(sizeof...(l) < 3) throw;
-        //points = {(point(l))...};
-        //a = points[1] - points[0], b = points[2] - points[0], c = cross_product(a, b);
-        //k = c.x * points[0].x + c.y * points[1].y + c.z * points[2].z;
-    }//catch(...){std::cout << "error: number of points to polygon's constructor must be greater than two\n";}
+		//points = {(point(l))...};
+		//a = points[1] - points[0], b = points[2] - points[0], c = cross_product(a, b);
+		//k = c.x * points[0].x + c.y * points[1].y + c.z * points[2].z;
+	}//catch(...){std::cout << "error: number of points to polygon's constructor must be greater than two\n";}
 	virtual void set_color(const color c){clr = c;}
-    virtual void set_name(const char* str){name = str;}
 	#ifdef IMAGE
-	virtual void set_image(image/*&&*/ i){img = /*std::move(*/i/*)*/;}
+	virtual void set_image(const image/*&&*/ i){img = /*std::move(*/i/*)*/;}
 	#endif
+	virtual void set_name(const char* str){name = str;}
 	virtual void set_class_name() override{class_name = "polygon";}
 	virtual void on_hit(const std::function<void(const vector&, const hit_val&)>& input_function){pressed = input_function;}
 	point calculate_centroid() const{
@@ -639,12 +651,12 @@ struct polygon : public object{
 	}
 	void stretch(const double& greatest, point& p) const{
 		//fix to accomodate for yar par and rar
-        double factor = greatest / p.z;
-        p.x *= factor;
-        p.y *= factor;
-        p.z = greatest;
-    }
-    /*std::pair<bool, double>*/ hit_val hit(vector u) const override{
+		double factor = greatest / p.z;
+		p.x *= factor;
+		p.y *= factor;
+		p.z = greatest;
+	}
+	/*std::pair<bool, double>*/ hit_val hit(vector u) const override{
 		static double yar_snap = yaw_angle_radians, par_snap = pitch_angle_radians, rar_snap = roll_angle_radians;
 		static double y_snap = yaw_rad, p_snap = pitch_rad, r_snap = roll_rad;
 		static std::vector<point> vertices;
@@ -668,10 +680,10 @@ struct polygon : public object{
 		[[maybe_unused]]
 		#endif
 		static bool once = [&](){
-            vertices = points;
+			vertices = points;
 			is_triangle = (points.size() == 3);
 			a = points[1] - points[0], b = points[2] - points[0], c = cross_product(a, b);
-        	//k = c.x * points[0].x + c.y * points[1].y + c.z * points[2].z;
+			//k = c.x * points[0].x + c.y * points[1].y + c.z * points[2].z;
 			k = c.x * points[0].x + c.y * points[0].y + c.z * points[0].z;
 			double greatest = greater(greater(points[0].z, points[1].z), points[2].z);
 			for(point& i : vertices) stretch(greatest, i);
@@ -694,14 +706,14 @@ struct polygon : public object{
 		//todo: do the same thing for u.x and u.y
 		#if 0
 		for(const point& i : points) //maybe change to vertices
-            if((u.z < 0 && i.z < 0) || (u.z > 0 && i.z > 0)) goto polygon_start;
-       	return /*std::pair<bool, double>*/ hit_val(false, 0);
-        polygon_start:
+			if((u.z < 0 && i.z < 0) || (u.z > 0 && i.z > 0)) goto polygon_start;
+		return /*std::pair<bool, double>*/ hit_val(false, 0);
+		polygon_start:
 		#endif
 		#if 0
 		static double yar_snap = yaw_angle_radians, par_snap = pitch_angle_radians, rar_snap = roll_angle_radians;
-       	static double y_snap = yaw_rad, p_snap = pitch_rad, r_snap = roll_rad;
- 		static std::vector<point> vertices;
+		static double y_snap = yaw_rad, p_snap = pitch_rad, r_snap = roll_rad;
+		static std::vector<point> vertices;
 		static bool is_triangle;
 		static int call_num = 0, calls_per_frame = width_px * height_px;
 		static vector a, b, c;
@@ -713,10 +725,10 @@ struct polygon : public object{
 		[[maybe_unused]]
 		#endif
 		static bool once = [&](){
-            vertices = points;
+			vertices = points;
 			is_triangle = (points.size() == 3);
 			a = points[1] - points[0], b = points[2] - points[0], c = cross_product(a, b);
-        	//k = c.x * points[0].x + c.y * points[1].y + c.z * points[2].z;
+			//k = c.x * points[0].x + c.y * points[1].y + c.z * points[2].z;
 			k = c.x * points[0].x + c.y * points[0].y + c.z * points[0].z;
 			double greatest = greater(greater(points[0].z, points[1].z), points[2].z);
 			for(point& i : vertices) stretch(greatest, i);
@@ -734,29 +746,29 @@ struct polygon : public object{
 		#endif
 		#endif
 		//may not be accurate for non-unit vectors, do something if its not normalized ig
-        //double e = u.x * c.x + u.y * c.y + u.z * c.z;
-        double e = dot_product(u, c);
+		//double e = u.x * c.x + u.y * c.y + u.z * c.z;
+		double e = dot_product(u, c);
 		double t = k / e;
-        if(likely(!e || (u.z * t < 0))) return /*std::pair<bool, double>*/ hit_val(false, 0);
-        point intersection(u.x * t, u.y * t, u.z * t);
+		if(likely(!e || (u.z * t < 0))) return /*std::pair<bool, double>*/ hit_val(false, 0);
+		point intersection(u.x * t, u.y * t, u.z * t);
 		//std::cout << "t: " << t << '\n';
 		//std::cout << "intersection: " << intersection.x << ' ' << intersection.y << ' ' << intersection.z << '\n';
-        //double distance = sqrt(intersection.x * intersection.x + intersection.y * intersection.y + intersection.z * intersection.z);
+		//double distance = sqrt(intersection.x * intersection.x + intersection.y * intersection.y + intersection.z * intersection.z);
 		double distance = intersection.magnitude();
 		double greatest = greater(greater(points[0].z, points[1].z), points[2].z);
 
 		//return [&greatest, &distance, &intersection, this](std::vector<point>& points){
 		/*
 		static double yar_snap = yaw_angle_radians, par_snap = pitch_angle_radians, rar_snap = roll_angle_radians;
-        static std::vector<point> vertices;
+		static std::vector<point> vertices;
 		static int call_num = 0, calls_per_frame = width_px * height_px;;
 		#if __cplusplus >= 201703L
 		[[maybe_unused]]
 		#endif
 		static bool once = [&](){
-            vertices = points;
+			vertices = points;
 			a = points[1] - points[0], b = points[2] - points[0], c = cross_product(a, b);
-        	k = c.x * points[0].x + c.y * points[1].y + c.z * points[2].z;
+			k = c.x * points[0].x + c.y * points[1].y + c.z * points[2].z;
 			double greatest = greater(greater(points[0].z, points[1].z), points[2].z);
 			for(point& i : vertices) stretch(greatest, i);
 			return true;
@@ -764,40 +776,40 @@ struct polygon : public object{
 		#if __cplusplus < 201703L
 		(void)once; //for no warning
 		#endif
-        */
+		*/
 		if(likely(call_num < calls_per_frame)){
-        	stretch(greatest, intersection);
+			stretch(greatest, intersection);
 			++call_num;
 		}else{
-            call_num = 0;
+			call_num = 0;
 			if(vertices.size() != points.size()) goto update;
 			for(int i = 0; i < (int)vertices.size(); ++i)
 				if(vertices[i].x != points[i].x || vertices[i].y != points[i].y) goto update;
 			if(calls_per_frame != width_px * height_px)
-                calls_per_frame = width_px * height_px;
+				calls_per_frame = width_px * height_px;
 			if(y_snap != yaw_rad || p_snap != pitch_rad || r_snap != roll_rad){
 				y_snap = yaw_rad, p_snap = pitch_rad, r_snap = roll_rad;
 				goto update;
 			}
 			if(yar_snap != yaw_angle_radians){
-                yar_snap = yaw_angle_radians; 
-                goto update;
-            }
-            if(par_snap != pitch_angle_radians){
-                par_snap = pitch_angle_radians;
-                goto update;
-            }
-            if(rar_snap != roll_angle_radians){
-                rar_snap = roll_angle_radians;
-                update:
-                vertices = points;
+				yar_snap = yaw_angle_radians; 
+				goto update;
+			}
+			if(par_snap != pitch_angle_radians){
+				par_snap = pitch_angle_radians;
+				goto update;
+			}
+			if(rar_snap != roll_angle_radians){
+				rar_snap = roll_angle_radians;
+				update:
+				vertices = points;
 				is_triangle = (points.size() == 3);
 				a = points[1] - points[0], b = points[2] - points[0], c = cross_product(a, b);
-        		//k = c.x * points[0].x + c.y * points[1].y + c.z * points[2].z;
-                k = c.x * points[0].x + c.y * points[0].y + c.z * points[0].z;
+				//k = c.x * points[0].x + c.y * points[1].y + c.z * points[2].z;
+				k = c.x * points[0].x + c.y * points[0].y + c.z * points[0].z;
 				double greatest = greater(greater(points[0].z, points[1].z), points[2].z);
-    			for(point& i : vertices) stretch(greatest, i);
-            	#ifdef IMAGE
+				for(point& i : vertices) stretch(greatest, i);
+				#ifdef IMAGE
 				if(is_triangle){
 					//centroid.x = (vertices[0].x + vertices[1].x + vertices[2].x) / 3, 
 					//centroid.y = (vertices[0].y + vertices[1].y + vertices[2].y) / 3,
@@ -808,7 +820,7 @@ struct polygon : public object{
 				else{/*calculate*/}
 				#endif
 				stretch(greatest, intersection);
-            }
+			}
 			/*
 			if(y_snap != yaw_rad || p_snap != pitch_rad || r_snap != roll_rad){
 				y_snap = yaw_rad, p_snap = pitch_rad, r_snap = roll_rad;
@@ -816,62 +828,62 @@ struct polygon : public object{
 					i.rotate_yaw(yaw_rad), i.rotate_pitch(pitch_rad), i.rotate_roll(roll_rad);
 			}
 			*/
-        }
-        //#define tri_specialization
-        //#define first_algorithm
+		}
+		//#define tri_specialization
+		//#define first_algorithm
 
-        #ifdef tri_specialization
-        if(/*vertices.size() == 3*/ is_triangle){
-            #ifdef first_algorithm
+		#ifdef tri_specialization
+		if(/*vertices.size() == 3*/ is_triangle){
+			#ifdef first_algorithm
 				int one = 1, two = 2;
-                if(vertices[2].y == vertices[0].y){
-                    //point temp = vertices[2];
-                    //vertices[2] = vertices[1];
-                    //vertices[1] = temp;
+				if(vertices[2].y == vertices[0].y){
+					//point temp = vertices[2];
+					//vertices[2] = vertices[1];
+					//vertices[1] = temp;
 					one = 2;
 					two = 1;
-                }
-                double s1 = vertices[two].y - vertices[0].y,
-                       s2 = vertices[two].x - vertices[0].x,
-                       s3 = vertices[one].y - vertices[0].y,
-                       s4 = intersection.y - vertices[0].y;
-                double w1 = (vertices[0].x * s1 + s4 * s2 - intersection.x * s1) / (s3 * s2 - (vertices[one].x - vertices[0].x) * s1),
-                       w2 = (s4 - w1 * s3) / s1;
+				}
+				double s1 = vertices[two].y - vertices[0].y,
+					   s2 = vertices[two].x - vertices[0].x,
+					   s3 = vertices[one].y - vertices[0].y,
+					   s4 = intersection.y - vertices[0].y;
+				double w1 = (vertices[0].x * s1 + s4 * s2 - intersection.x * s1) / (s3 * s2 - (vertices[one].x - vertices[0].x) * s1),
+					   w2 = (s4 - w1 * s3) / s1;
 				#ifndef IMAGE
 				bool hit_polygon = w1 >= 0 && w2 >= 0 && (w1 + w2) <= 1;
 				hit_val h(hit_polygon, distance);
 				if(hit_polygon) pressed(u, h);
 				//return hit_val(hit_polygon, distance);
 				return h;
-                //return /*std::pair<bool, double>*/ hit_val(w1 >= 0 && w2 >= 0 && (w1 + w2) <= 1, distance);
-            	#else
+				//return /*std::pair<bool, double>*/ hit_val(w1 >= 0 && w2 >= 0 && (w1 + w2) <= 1, distance);
+				#else
 				//do
 				#endif
 			#else
-                auto sign = [](point p1, point p2, point p3) -> double{
-                    return (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y);
-                };
-                double d1 = sign(intersection, vertices[0], vertices[1]),
-                       d2 = sign(intersection, vertices[1], vertices[2]),
-                       d3 = sign(intersection, vertices[2], vertices[0]);
-                bool neg = d1 < 0 || d2 < 0 || d3 < 0,
-                     pos = d1 > 0 || d2 > 0 || d3 > 0,
-                     ret = !(neg && pos);
+				auto sign = [](point p1, point p2, point p3) -> double{
+					return (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y);
+				};
+				double d1 = sign(intersection, vertices[0], vertices[1]),
+					   d2 = sign(intersection, vertices[1], vertices[2]),
+					   d3 = sign(intersection, vertices[2], vertices[0]);
+				bool neg = d1 < 0 || d2 < 0 || d3 < 0,
+					 pos = d1 > 0 || d2 > 0 || d3 > 0,
+					 ret = !(neg && pos);
 				hit_val h(ret, distance);
 				if(ret) pressed(u, h);
 				#ifndef IMAGE
 				//return /*std::pair<bool, double>*/ hit_val(ret, distance);
-            	#else
+				#else
 				//do
 				#endif
 			#endif
-        }
-        #endif
-        bool inside = false;
-        for(int i = 0, j = vertices.size() - 1; i < (int)vertices.size(); j = i++)
-            if(((vertices[i].y > intersection.y) != (vertices[j].y > intersection.y)) &&
-                (intersection.x < (vertices[j].x - vertices[i].x) * (intersection.y - vertices[i].y) / (vertices[j].y - vertices[i].y) + vertices[i].x))
-                    inside = !inside;
+		}
+		#endif
+		bool inside = false;
+		for(int i = 0, j = vertices.size() - 1; i < (int)vertices.size(); j = i++)
+			if(((vertices[i].y > intersection.y) != (vertices[j].y > intersection.y)) &&
+				(intersection.x < (vertices[j].x - vertices[i].x) * (intersection.y - vertices[i].y) / (vertices[j].y - vertices[i].y) + vertices[i].x))
+					inside = !inside;
 		hit_val h(inside, distance);
 		if(inside) pressed(u, h);
 		#ifndef IMAGE
@@ -881,10 +893,10 @@ struct polygon : public object{
 		if(!is_triangle) return h;//return hit_val(inside, distance);
 		if(!img.width || !img.height) return h;//return hit_val(inside, distance);
 		//int x = img.width / 2 + intersection.x - centroid.x, y = img.height / 2 + intersection.y - centroid.y;
-	 	//double triangle_width = greater(greater(abs_val(vertices[1].x - vertices[0].x), abs_val(vertices[2].x - vertices[0].x)), abs_val(vertices[2].x - vertices[1].x)), triangle_height = greater(greater(abs_val(vertices[1].y - vertices[0].y), abs_val(vertices[2].y - vertices[0].y)), abs_val(vertices[2].y - vertices[1].y)); 
+		//double triangle_width = greater(greater(abs_val(vertices[1].x - vertices[0].x), abs_val(vertices[2].x - vertices[0].x)), abs_val(vertices[2].x - vertices[1].x)), triangle_height = greater(greater(abs_val(vertices[1].y - vertices[0].y), abs_val(vertices[2].y - vertices[0].y)), abs_val(vertices[2].y - vertices[1].y)); 
 		double x = 0.5 + (intersection.x - centroid.x) / triangle_width, y = 0.5 + (intersection.y - centroid.y) / triangle_height;
 		//color hit_color = img.color_at(x, y);
-		if(x < 0 || x > 1 || y < 0 || y > 1){h.third = RGB(255, 255, 255); return h;}//return hit_val(inside, distance, RGB(255, 255, 255));
+		if(x < 0 || x > 1 || y < 0 || y > 1){h.third = background; return h;}//return hit_val(inside, distance, RGB(255, 255, 255));
 		color hit_color = img.color_at(x * img.width, y * img.height);
 		h.third = hit_color;
 		return h;
@@ -892,7 +904,7 @@ struct polygon : public object{
 		#endif
 		//}(const_cast<std::vector<point>&>(points));
 	}
-    bool is_in_frustum(const plane_array& plane) const override{
+	bool is_in_frustum(const plane_array& plane) const override{
 		for(const point& i : points){
 			/*
 			vector left_vector = plane[2][0] - plane[2][1], // vector pointing left from top right to top left
@@ -905,7 +917,7 @@ struct polygon : public object{
 			for(std::vector<point>& bound : plane){
 				vector a = bound[1] - bound[0], b = bound[2] - bound[0], cross = cross_product(a, b);
 				//double cross_mag = sqrt(cross.x * cross.x + cross.y * cross.y + cross.z * cross.z);
-            	//cross.x /= cross_mag, cross.y /= cross_mag, cross.z /= cross_mag;
+				//cross.x /= cross_mag, cross.y /= cross_mag, cross.z /= cross_mag;
 				double distance = dot_product(cross, i);
 				//assuming < 0 is pointing out for some reason
 				if(distance < 0){
@@ -918,7 +930,7 @@ struct polygon : public object{
 			//assuming again
 			double left_distance = plane_distance(plane[0], i), right_distance = plane_distance(plane[1], i),
 				   top_distance = plane_distance(plane[2], i), bottom_distance = plane_distance(plane[3], i);
-        	//std::cout << "point " << i.x << ' ' << i.y << ' ' << i.z << 
+			//std::cout << "point " << i.x << ' ' << i.y << ' ' << i.z << 
 			//			 " distances: " << left_distance << ' ' << right_distance << ' ' << top_distance << ' ' << bottom_distance << '\n';
 			if(left_distance > 0 && right_distance > 0 && top_distance > 0 && bottom_distance > 0) return true;
 			//bool left_side = on_plane_normal_side(plane[0], i), right_side = on_plane_normal_side(plane[1], i), top_side = on_plane_normal_side(plane[2], i), bottom_side = on_plane_normal_side(plane[3], i);
@@ -930,11 +942,11 @@ struct polygon : public object{
 			//std::cout << "point " << i.x << ' ' << i.y << ' ' << i.z << '\n'; //<<
 			//			 " distances: " << left_distance << ' ' << right_distance << ' ' << top_distance << ' ' << bottom_distance << '\n';
 		}
-        //return false;
+		//return false;
 		//todo: moving left twice and down once makes the polygon disappear :(
 		//todo: when going down the distance to bottom becomes negative for some reason
-        //return this->hit(plane[0][0]).first || this->hit(plane[0][1]).first || this->hit(plane[1][0]).first || this->hit(plane[1][1]).first; 
-    	//bool corner_in_polygon = this->hit(plane[0][0]).first || this->hit(plane[0][1]).first || this->hit(plane[1][0]).first || this->hit(plane[1][1]).first; 
+		//return this->hit(plane[0][0]).first || this->hit(plane[0][1]).first || this->hit(plane[1][0]).first || this->hit(plane[1][1]).first; 
+		//bool corner_in_polygon = this->hit(plane[0][0]).first || this->hit(plane[0][1]).first || this->hit(plane[1][0]).first || this->hit(plane[1][1]).first; 
 		hit_val c1 = this->hit(plane[0][0]), c2 = this->hit(plane[0][1]), c3 = this->hit(plane[1][0]), c4 = this->hit(plane[1][1]);
 		bool corner_in_polygon = c1.first || c2.first || c3.first || c4.first;	
 		if(!corner_in_polygon){
@@ -945,8 +957,8 @@ struct polygon : public object{
 		return corner_in_polygon;
 	}
 //private:
-    //vector a, b, c;
-    //double k;
+	//vector a, b, c;
+	//double k;
 };
 namespace cone_type{
 	struct default_cone{};
@@ -1000,7 +1012,10 @@ struct cone : public object{
 	base_type<type> base;
 	point vertex;
 	virtual void set_color(const color c){clr = c;}
-    virtual void set_name(const char* str){name = str;}
+	#ifdef IMAGE
+	virtual void set_image(const image/*&&*/ i){img = /*std::move(*/i/*)*/;}
+	#endif
+	virtual void set_name(const char* str){name = str;}
 	/*
 	virtual void set_class_name(cone_type::default_cone* sfinae[std::is_same<type, cone_type::default_cone>::value] = 0){(void)sfinae; class_name = "cone";}
 	virtual void set_class_name(cone_type::elliptical_cone* sfinae[std::is_same<type, cone_type::elliptical_cone>::value] = 0){(void)sfinae; class_name = "elliptical_cone";}
@@ -1019,8 +1034,7 @@ struct cone : public object{
 	virtual void set_class_name() override{
 		#if __cplusplus >= 201703L
 			if constexpr(std::is_same_v<type, cone_type::default_cone>) class_name = "cone";
-			//the last type of cone is likely, as the user has a low chance to input a non-cone type
-			else if constexpr(likely(std::is_same_v<type, cone_type::elliptical_cone>)) class_name = "elliptical_cone";
+			else if constexpr(std::is_same_v<type, cone_type::elliptical_cone>) class_name = "elliptical_cone";
 			else throw std::runtime_error("not a cone type");
 		#else
 			/*
@@ -1046,7 +1060,7 @@ struct cone : public object{
 	virtual void set_yaw(const double y){yaw_rad = y;}
 	virtual void set_pitch(const double p){pitch_rad = p;}
 	virtual void set_roll(const double r){roll_rad = r;}
-	#if __cplusplus < 201703L
+	//#if __cplusplus < 201703L
 	template<typename T, typename unused = void> struct _SPECIALIZE_HIT{
 		static hit_val hit(vector){throw std::runtime_error("not a cone type"); return hit_val(false, 0);}
 	};
@@ -1062,7 +1076,7 @@ struct cone : public object{
 			return hit_val(true, 0);
 		}
 	};
-	#endif
+	//#endif
 	hit_val hit(vector u/*, cone_type::default_cone* sfinae[std::is_same<type, cone_type::default_cone>::value] = 0*/) const override{
 		/*
 		static point centroid; //todo: find centroid
@@ -1071,6 +1085,7 @@ struct cone : public object{
 		u_start += centroid;
 		u.rotate(yaw_rad, pitch_rad, roll_rad);	
 		*/
+		/*
 		#if __cplusplus >= 201703L
 			if constexpr(std::is_same_v<type, cone_type::default_cone>){
 				//todo: calculate guiding curve
@@ -1085,6 +1100,7 @@ struct cone : public object{
 			}
 			throw std::runtime_error("not a cone type");
 		#else
+		*/
 			/*
 			static constexpr bool is_default = std::is_same<type, cone_type::default_cone>::value;
 			if(is_default){
@@ -1099,7 +1115,7 @@ struct cone : public object{
 			throw std::runtime_error("not a cone type");
 			*/
 			return _SPECIALIZE_HIT<type>::hit(u);
-		#endif
+		//#endif
 	}
 	/*
 	hit_val hit(vector u, cone_type::elliptical_cone* sfinae[std::is_same<type, cone_type::elliptical_cone>::value] = 0) const override{
@@ -1123,15 +1139,15 @@ typedef cone<cone_type::elliptical_cone> elliptical_cone;
 //typedef cone<cone_type::elliptical_cone> elliptical_cone;
 //#endif
 struct doughnut : public object{
-    point center;
-    double minor_radius, major_radius;
-    //double yaw_rad, pitch_rad;
-    doughnut(color cl, double minor_r, double major_r, point c, double yaw = 0, double pitch = 0) :
-        center(c), minor_radius(minor_r), major_radius(major_r), /*yaw_rad(yaw), pitch_rad(pitch),*/ epsilon(major_r * major_r - minor_r * minor_r){set_color(cl), set_class_name(), set_name("the default doughnut"), set_yaw(yaw), set_pitch(pitch);}
-    doughnut(color cl, double minor_r, double major_r, point c, const char* n, double yaw = 0, double pitch = 0) :
-        center(c), minor_radius(minor_r), major_radius(major_r), /*yaw_rad(yaw), pitch_rad(pitch),*/ epsilon(major_r * major_r - minor_r * minor_r){set_color(cl), set_class_name(), set_name(n); set_yaw(yaw), set_pitch(pitch);}
+	point center;
+	double minor_radius, major_radius;
+	//double yaw_rad, pitch_rad;
+	doughnut(color cl, double minor_r, double major_r, point c, double yaw = 0, double pitch = 0) :
+		center(c), minor_radius(minor_r), major_radius(major_r), /*yaw_rad(yaw), pitch_rad(pitch),*/ epsilon(major_r * major_r - minor_r * minor_r){set_color(cl), set_class_name(), set_name("the default doughnut"), set_yaw(yaw), set_pitch(pitch);}
+	doughnut(color cl, double minor_r, double major_r, point c, const char* n, double yaw = 0, double pitch = 0) :
+		center(c), minor_radius(minor_r), major_radius(major_r), /*yaw_rad(yaw), pitch_rad(pitch),*/ epsilon(major_r * major_r - minor_r * minor_r){set_color(cl), set_class_name(), set_name(n); set_yaw(yaw), set_pitch(pitch);}
 	virtual void set_color(const color c){clr = c;}
-    virtual void set_name(const char* str){name = str;}
+	virtual void set_name(const char* str){name = str;}
 	virtual void set_class_name() override{class_name = "doughnut";}
 	virtual void on_hit(const std::function<void(const vector&, const hit_val&)>& input_function){pressed = input_function;}
 	virtual void translate(const double x, const double y, const double z) override{
@@ -1144,7 +1160,7 @@ struct doughnut : public object{
 	virtual void set_pitch(const double p){pitch_rad = p;}
 	virtual void set_roll(const double r){roll_rad = r;}
 	/*std::pair<bool, double>*/ hit_val hit(vector u) const override{
-        //u -= center; // todo: with a center other than the origin the donut does weird things
+		//u -= center; // todo: with a center other than the origin the donut does weird things
 		//already accounted for in formula but it still does weird things
 		#if 0
 		if(yaw_rad){
@@ -1171,38 +1187,38 @@ struct doughnut : public object{
 		constexpr double scaler = 1;
 		u.x /= (magnitude * scaler), u.y /= (magnitude * scaler), u.z /= (magnitude * scaler);
 		long double a, b, c, d, e;
-        {
-            long double _a = /*-center*/u_origin.x, _b = u.x, _c = /*-center*/u_origin.y, _d = u.y, _e = /*-center*/u_origin.z, _f = u.z;
+		{
+			long double _a = /*-center*/u_origin.x, _b = u.x, _c = /*-center*/u_origin.y, _d = u.y, _e = /*-center*/u_origin.z, _f = u.z;
 
-            #define simplify_donut
+			#define simplify_donut
 
-            #ifdef simplify_donut
-                a = square(_b * _b + _d * _d + _f * _f);
-                b = 4*(_a*_b*_b*_b + _a*_b*_d*_d + _b*_b*_c*_d + _c*_d*_d*_d + _e*_f*_f*_f + _a*_b*_f*_f + _e*_b*_b*_f + _c*_d*_f*_f + _e*_d*_d*_f);
-                c = 2*(3*_a*_a*_b*_b + _a*_a*_d*_d + 4*_a*_b*_c*_d + _b*_b*_c*_c + 3*_c*_c*_d*_d * 3*_e*_e*_f*_f + _a*_a*_f*_f + 4*_e*_a*_b*_f + _e*_e*_b*_b + _c*_c*_f*_f + 4*_e*_c*_d*_f + _e*_e*_d*_d + epsilon*_b*_b + epsilon*_d*_d + epsilon*_f*_f - 2*major_radius*major_radius*_b*_b - 2*major_radius*major_radius*_d*_d);
-                d = 4*(_a*_a*_a*_b + _a*_a*_c*_d + _a*_b*_c*_c + _c*_c*_c*_d + _e*_e*_e*_f + _e*_e*_a*_b + _e*_c*_c*_f + _e*_e*_c*_d + epsilon*_a*_b + epsilon*_c*_d + _e*epsilon*_f - 2*major_radius*major_radius*_a*_b - 2*major_radius*major_radius*_c*_d);
-                e = _a*_a*_a*_a + 2*_a*_a*_c*_c + _c*_c*_c*_c + _e*_e*_e*_e + epsilon*epsilon + 2*_e*_e*_a*_a + 2*_e*_e*_c*_c + 2*epsilon*_a*_a + 2*epsilon*_c*_c + 2*_e*_e*epsilon - 4*major_radius*major_radius*_a*_a - 4*major_radius*major_radius*_c*_c;
-            #else
-                a = _b*_b*_b*_b + 2*_b*_b*_d*_d + _d*_d*_d*_d + _f*_f*_f*_f + 2*_b*_b*_f*_f + 2*_d*_d*_f*_f;
+			#ifdef simplify_donut
+				a = square(_b * _b + _d * _d + _f * _f);
+				b = 4*(_a*_b*_b*_b + _a*_b*_d*_d + _b*_b*_c*_d + _c*_d*_d*_d + _e*_f*_f*_f + _a*_b*_f*_f + _e*_b*_b*_f + _c*_d*_f*_f + _e*_d*_d*_f);
+				c = 2*(3*_a*_a*_b*_b + _a*_a*_d*_d + 4*_a*_b*_c*_d + _b*_b*_c*_c + 3*_c*_c*_d*_d * 3*_e*_e*_f*_f + _a*_a*_f*_f + 4*_e*_a*_b*_f + _e*_e*_b*_b + _c*_c*_f*_f + 4*_e*_c*_d*_f + _e*_e*_d*_d + epsilon*_b*_b + epsilon*_d*_d + epsilon*_f*_f - 2*major_radius*major_radius*_b*_b - 2*major_radius*major_radius*_d*_d);
+				d = 4*(_a*_a*_a*_b + _a*_a*_c*_d + _a*_b*_c*_c + _c*_c*_c*_d + _e*_e*_e*_f + _e*_e*_a*_b + _e*_c*_c*_f + _e*_e*_c*_d + epsilon*_a*_b + epsilon*_c*_d + _e*epsilon*_f - 2*major_radius*major_radius*_a*_b - 2*major_radius*major_radius*_c*_d);
+				e = _a*_a*_a*_a + 2*_a*_a*_c*_c + _c*_c*_c*_c + _e*_e*_e*_e + epsilon*epsilon + 2*_e*_e*_a*_a + 2*_e*_e*_c*_c + 2*epsilon*_a*_a + 2*epsilon*_c*_c + 2*_e*_e*epsilon - 4*major_radius*major_radius*_a*_a - 4*major_radius*major_radius*_c*_c;
+			#else
+				a = _b*_b*_b*_b + 2*_b*_b*_d*_d + _d*_d*_d*_d + _f*_f*_f*_f + 2*_b*_b*_f*_f + 2*_d*_d*_f*_f;
 
-                b = 4*_a*_b*_b*_b + 4*_a*_b*_d*_d + 4*_b*_b*_c*_d + 4*_c*_d*_d*_d + 4*_e*_f*_f*_f + 4*_a*_b*_f*_f + 4*_e*_b*_b*_f + 4*_c*_d*_f*_f + 4*_e*_d*_d*_f;
-                c = 6*_a*_a*_b*_b + 2*_a*_a*_d*_d + 8*_a*_b*_c*_d + 2*_b*_b*_c*_c + 6*_c*_c*_d*_d * 6*_e*_e*_f*_f + 2*_a*_a*_f*_f + 8*_e*_a*_b*_f + 2*_e*_e*_b*_b + 2*_c*_c*_f*_f + 8*_e*_c*_d*_f + 2*_e*_e*_d*_d + 2*epsilon*_b*_b + 2*epsilon*_d*_d + 2*epsilon*_f*_f - 4*major_radius*major_radius*_b*_b - 4*major_radius*major_radius*_d*_d;
-                d = 4*_a*_a*_a*_b + 4*_a*_a*_c*_d + 4*_a*_b*_c*_c + 4*_c*_c*_c*_d + 4*_e*_e*_e*_f + 4*_e*_e*_a*_b + 4*_e*_c*_c*_f + 4*_e*_e*_c*_d + 4*epsilon*_a*_b + 4*epsilon*_c*_d + 4*_e*epsilon*_f - 8*major_radius*major_radius*_a*_b - 8*major_radius*major_radius*_c*_d;
-                e = _a*_a*_a*_a + 2*_a*_a*_c*_c + _c*_c*_c*_c + _e*_e*_e*_e + epsilon*epsilon + 2*_e*_e*_a*_a + 2*_e*_e*_c*_c + 2*epsilon*_a*_a + 2*epsilon*_c*_c + 2*_e*_e*epsilon - 4*major_radius*major_radius*_a*_a - 4*major_radius*major_radius*_c*_c;
-            #endif
-        }
-        b /= a;
-        c /= a;
-        d /= a;
-        e /= a;
-        long double discriminant = 256 * e * e * e - 192 * b * d * e * e - 128 * c * c * e * e + 144 * c * d * d * e - 27 * d * d * d *d + 144 * b * b * c * e * e - 6 * b * b * d * d * e - 80 * b * c * c * d * e + 18 * b * c * d * d * d + 16 * c * c * c * c * e - 4 * c * c * c * d * d - 27 * b * b * b * b * e * e + 18 * b * b * b * c * d * e - 4 * b * b * b * d * d * d - 4 * b * b * c * c * c * e + b * b * c * c * d * d;
-        long double p = 8 * c - 3 * b * b;
-        long double g = 64 * e - 16 * c * c + 16 * b * b * c - 16 * b * d - 3 * b * b * b * b;
-        //todo: find the distance instead of just putting 100
+				b = 4*_a*_b*_b*_b + 4*_a*_b*_d*_d + 4*_b*_b*_c*_d + 4*_c*_d*_d*_d + 4*_e*_f*_f*_f + 4*_a*_b*_f*_f + 4*_e*_b*_b*_f + 4*_c*_d*_f*_f + 4*_e*_d*_d*_f;
+				c = 6*_a*_a*_b*_b + 2*_a*_a*_d*_d + 8*_a*_b*_c*_d + 2*_b*_b*_c*_c + 6*_c*_c*_d*_d * 6*_e*_e*_f*_f + 2*_a*_a*_f*_f + 8*_e*_a*_b*_f + 2*_e*_e*_b*_b + 2*_c*_c*_f*_f + 8*_e*_c*_d*_f + 2*_e*_e*_d*_d + 2*epsilon*_b*_b + 2*epsilon*_d*_d + 2*epsilon*_f*_f - 4*major_radius*major_radius*_b*_b - 4*major_radius*major_radius*_d*_d;
+				d = 4*_a*_a*_a*_b + 4*_a*_a*_c*_d + 4*_a*_b*_c*_c + 4*_c*_c*_c*_d + 4*_e*_e*_e*_f + 4*_e*_e*_a*_b + 4*_e*_c*_c*_f + 4*_e*_e*_c*_d + 4*epsilon*_a*_b + 4*epsilon*_c*_d + 4*_e*epsilon*_f - 8*major_radius*major_radius*_a*_b - 8*major_radius*major_radius*_c*_d;
+				e = _a*_a*_a*_a + 2*_a*_a*_c*_c + _c*_c*_c*_c + _e*_e*_e*_e + epsilon*epsilon + 2*_e*_e*_a*_a + 2*_e*_e*_c*_c + 2*epsilon*_a*_a + 2*epsilon*_c*_c + 2*_e*_e*epsilon - 4*major_radius*major_radius*_a*_a - 4*major_radius*major_radius*_c*_c;
+			#endif
+		}
+		b /= a;
+		c /= a;
+		d /= a;
+		e /= a;
+		long double discriminant = 256 * e * e * e - 192 * b * d * e * e - 128 * c * c * e * e + 144 * c * d * d * e - 27 * d * d * d *d + 144 * b * b * c * e * e - 6 * b * b * d * d * e - 80 * b * c * c * d * e + 18 * b * c * d * d * d + 16 * c * c * c * c * e - 4 * c * c * c * d * d - 27 * b * b * b * b * e * e + 18 * b * b * b * c * d * e - 4 * b * b * b * d * d * d - 4 * b * b * c * c * c * e + b * b * c * c * d * d;
+		long double p = 8 * c - 3 * b * b;
+		long double g = 64 * e - 16 * c * c + 16 * b * b * c - 16 * b * d - 3 * b * b * b * b;
+		//todo: find the distance instead of just putting 100
 		hit_val h;
 		h.second = 100;
-        if(discriminant < 0){pressed(u, h); h.first = true; return /*std::pair<bool, double>*/ /*hit_val(true, 100);*/ h;}
-        if(!discriminant){
+		if(discriminant < 0){pressed(u, h); h.first = true; return /*std::pair<bool, double>*/ /*hit_val(true, 100);*/ h;}
+		if(!discriminant){
 			bool hit_doughnut = !(!g && p > 0 && b * b * b + 8 * d - 4 * b * c);
 			h.first = hit_doughnut;
 			if(hit_doughnut) pressed(u, h);
@@ -1211,20 +1227,20 @@ struct doughnut : public object{
 			//return /*std::pair<bool, double>*/ hit_val(!(!g && p > 0 && b * b * b + 8 * d - 4 * b * c), 100);
 		}
 		//if(discriminant > 0)
-        //return std::pair<bool, double>(!(p > 0 || g > 0), 100);
+		//return std::pair<bool, double>(!(p > 0 || g > 0), 100);
 		bool hit_doughnut = p < 0 && g < 0;
-       	if(hit_doughnut) pressed(u, h);
+		if(hit_doughnut) pressed(u, h);
 		h.first = hit_doughnut;
 		return h;
 		//return hit_val(hit_doughnut, 100);
 		//return /*std::pair<bool, double>*/ hit_val(p < 0 && g < 0, 100);
-    }
-    bool is_in_frustum(const plane_array& plane) const override{
+	}
+	bool is_in_frustum(const plane_array& plane) const override{
 		(void)plane; //for no warning
-        return true; //for now
-    }
+		return true; //for now
+	}
 private:
-    double epsilon;
+	double epsilon;
 };
 std::vector<std::unique_ptr<object>> world;
 void translate_world(const double x, const double y, const double z){
@@ -1243,9 +1259,9 @@ double z = width / (2 * tan(horizontal_fov * convert_horizontal_fov_to_radians /
 typedef std::function<void(std::vector<object_pointer>&, plane_array&, bool&)> plane_setup_type;
 template<typename T> struct lambda_destructor{
 public:
-    T &lambda, after;
-    lambda_destructor(T& l, T a) : lambda(l), after(a){}
-    ~lambda_destructor(){lambda = after;}
+	T &lambda, after;
+	lambda_destructor(T& l, T a) : lambda(l), after(a){}
+	~lambda_destructor(){lambda = after;}
 };
 plane_setup_type plane_setup;
 //todo: make an option where the edges of shapes are not smoothened, if a pixel hit go back and see where it hit
@@ -1283,77 +1299,77 @@ std::function<void()> render =
 	}
 	
 	plane_array plane;
-    bool ypr;
-    //for clicks and stuff
-    plane_setup_type create_plane = [](std::vector<object_pointer>& can_hit, plane_array& plane, bool& ypr){
-        //can_hit = world; // copy
+	bool ypr;
+	//for clicks and stuff
+	plane_setup_type create_plane = [](std::vector<object_pointer>& can_hit, plane_array& plane, bool& ypr){
+		//can_hit = world; // copy
 		if(can_hit.size() != world.size()) can_hit.resize(world.size());
 		for(int i = 0; i < (int)world.size(); ++i)
 			can_hit[i] = &*world[i];
-        point bounding[4]{
-            point(-width / 2.0, height / 2.0, z), //upper left
-            point(width / 2.0, height / 2.0, z), //upper right
-            point(-width / 2.0, -height / 2.0, z), //bottom left
-            point(width / 2.0, -height / 2.0, z) //bottom right
-        };
-        ypr = /*yaw_angle_radians*/ abs_val(fmod(yaw_angle_radians, 2 * M_PI)) > 0.01 ||
-    			   /*pitch_angle_radians*/ abs_val(fmod(pitch_angle_radians, 2 * M_PI)) > 0.01 ||
-    			   /*roll_angle_radians*/ abs_val(fmod(roll_angle_radians, 2 * M_PI)) > 0.01;
-    	if(ypr){
-    		for(point& i : bounding){
+		point bounding[4]{
+			point(-width / 2.0, height / 2.0, z), //upper left
+			point(width / 2.0, height / 2.0, z), //upper right
+			point(-width / 2.0, -height / 2.0, z), //bottom left
+			point(width / 2.0, -height / 2.0, z) //bottom right
+		};
+		ypr = /*yaw_angle_radians*/ abs_val(fmod(yaw_angle_radians, 2 * M_PI)) > 0.01 ||
+				   /*pitch_angle_radians*/ abs_val(fmod(pitch_angle_radians, 2 * M_PI)) > 0.01 ||
+				   /*roll_angle_radians*/ abs_val(fmod(roll_angle_radians, 2 * M_PI)) > 0.01;
+		if(ypr){
+			for(point& i : bounding){
 				/*
-    			if(yaw_angle_radians){
-    				double cos_yar = cos(yaw_angle_radians), sin_yar = sin(yaw_angle_radians), sin_yar_x = sin_yar * i.x;
-    				i.x = cos_yar * i.x + sin_yar * i.z;
-    				i.z = -sin_yar_x + cos_yar * i.z;
-    			}
-    			if(pitch_angle_radians){
-    				//todo: check if pitch is actually correct
-    				double cos_par = cos(pitch_angle_radians), sin_par = sin(pitch_angle_radians), sin_par_y = sin_par * i.y;
-    				i.y = cos_par * i.y - sin_par * i.z;
-    				i.z = sin_par_y + cos_par * i.z;
-    			}
-    			if(roll_angle_radians){
-    				//todo: check if roll is actually correct
-    				double cos_rar = cos(roll_angle_radians), sin_rar = sin(roll_angle_radians), sin_rar_x = sin_rar * i.x;
-    				i.x = cos_rar * i.x - sin_rar * i.y;
-    				i.y = sin_rar_x + cos_rar * i.y;
-    			}
+				if(yaw_angle_radians){
+					double cos_yar = cos(yaw_angle_radians), sin_yar = sin(yaw_angle_radians), sin_yar_x = sin_yar * i.x;
+					i.x = cos_yar * i.x + sin_yar * i.z;
+					i.z = -sin_yar_x + cos_yar * i.z;
+				}
+				if(pitch_angle_radians){
+					//todo: check if pitch is actually correct
+					double cos_par = cos(pitch_angle_radians), sin_par = sin(pitch_angle_radians), sin_par_y = sin_par * i.y;
+					i.y = cos_par * i.y - sin_par * i.z;
+					i.z = sin_par_y + cos_par * i.z;
+				}
+				if(roll_angle_radians){
+					//todo: check if roll is actually correct
+					double cos_rar = cos(roll_angle_radians), sin_rar = sin(roll_angle_radians), sin_rar_x = sin_rar * i.x;
+					i.x = cos_rar * i.x - sin_rar * i.y;
+					i.y = sin_rar_x + cos_rar * i.y;
+				}
 				*/
 				//i.rotate_yaw(yaw_angle_radians);
 				//i.rotate_pitch(pitch_angle_radians);
 				//i.rotate_roll(roll_angle_radians);
 				i.rotate(yaw_angle_radians, pitch_angle_radians, roll_angle_radians);
-    		}
-    	}
-    	//todo: i guess change vector(0, -1, 0) to the correct vector for all pitch_angle_radians too (up and down)
-    	// fabricate a back side
+			}
+		}
+		//todo: i guess change vector(0, -1, 0) to the correct vector for all pitch_angle_radians too (up and down)
+		// fabricate a back side
 		//todo: make the backside the computer screen
-    	//vector left_vector = bounding[0] - bounding[1], // vector pointing left from top right to top left
-    	//	   projection = left_vector * (dot_product(bounding[0], left_vector) / dot_product(left_vector, left_vector)); // point on back side
-    
+		//vector left_vector = bounding[0] - bounding[1], // vector pointing left from top right to top left
+		//	   projection = left_vector * (dot_product(bounding[0], left_vector) / dot_product(left_vector, left_vector)); // point on back side
+	
 		//todo: potential issue, negative pitch rising the frustum?
-        plane = {
-            {bounding[0], bounding[2], point(0, 0, 0)}, //left
-    		{bounding[3], bounding[1], point(0, 0, 0)}, //right
-    		{bounding[1], bounding[0], point(0, 0, 0)}, //top
-            //{bounding[2], bounding[3], point(0, 0, 0)}, //bottom
+		plane = {
+			{bounding[0], bounding[2], point(0, 0, 0)}, //left
+			{bounding[3], bounding[1], point(0, 0, 0)}, //right
+			{bounding[1], bounding[0], point(0, 0, 0)}, //top
+			//{bounding[2], bounding[3], point(0, 0, 0)}, //bottom
 			{bounding[3], bounding[2], bounding[3] * 2}, //todo: fix bottom
-    		//{point(0, 0, 0), projection, point(0, -1, 0) /*fix*/}, //back test	
-    		//todo: maybe add front plane
-        };
+			//{point(0, 0, 0), projection, point(0, -1, 0) /*fix*/}, //back test	
+			//todo: maybe add front plane
+		};
 
-    	#if __cplusplus >= 202002L
-            std::erase_if(can_hit, [&plane](object_pointer i){return !i->is_in_frustum(plane);});
-        #else
-            can_hit.erase(std::remove_if(can_hit.begin(), can_hit.end(), [&plane](object_pointer i){return !i->is_in_frustum(plane);}), can_hit.end());
-        #endif
+		#if __cplusplus >= 202002L
+			std::erase_if(can_hit, [&plane](object_pointer i){return !i->is_in_frustum(plane);});
+		#else
+			can_hit.erase(std::remove_if(can_hit.begin(), can_hit.end(), [&plane](object_pointer i){return !i->is_in_frustum(plane);}), can_hit.end());
+		#endif
 	};
-    create_plane(can_hit, plane, ypr);
-    plane_setup = [&](std::vector<object_pointer>& c, plane_array& p, bool& yp){c = can_hit, p = plane, yp = ypr;};
-    lambda_destructor<plane_setup_type>(plane_setup, create_plane);
+	create_plane(can_hit, plane, ypr);
+	plane_setup = [&](std::vector<object_pointer>& c, plane_array& p, bool& yp){c = can_hit, p = plane, yp = ypr;};
+	lambda_destructor<plane_setup_type>(plane_setup, create_plane);
 	if(!can_hit.size()){
-		for(int i = 0; i < width_px * height_px; ++i) framebuf[i] = RGB(255, 255, 255);
+		for(int i = 0; i < width_px * height_px; ++i) framebuf[i] = background;
 		return;
 	}
 	if(ypr){
@@ -1384,7 +1400,8 @@ std::function<void()> render =
 				int index = prev + ipx;
 				vector v(row_vx, -row_vy, row_vz);
 				//if(index % 1000) std::cout << v.x << ' ' << v.y << ' ' << v.z << '\n';
-				v.normalize();
+				//v.normalize();
+				v.set_normalize();
 				object* smallest = can_hit[0];
 				/*std::pair<bool, double>*/ hit_val hit_b = smallest->hit(v);
 				bool hit_nothing = !hit_b.first;//, small_change = false;
@@ -1405,7 +1422,7 @@ std::function<void()> render =
 					}
 					else hit_nothing = !hit_b.first;
 				}
-				if(likely(hit_nothing)) framebuf[index] = RGB(255, 255, 255);//RGB(255, 0, 0);
+				if(likely(hit_nothing)) framebuf[index] = background;//RGB(255, 0, 0);
 				else 
 				#ifndef IMAGE
 					framebuf[index] = smallest->clr;
@@ -1447,7 +1464,8 @@ std::function<void()> render =
 				#endif
 				int index = jpx * width_px + ipx;
 				vector v(-width / 2 + i, height / 2 - j, z);
-				v.normalize();
+				//v.normalize();
+				v.set_normalize();
 				object* smallest = can_hit[0];
 				/*std::pair<bool, double>*/ hit_val hit_b = smallest->hit(v);
 				bool hit_nothing = !hit_b.first;//, small_change = false;
@@ -1467,7 +1485,7 @@ std::function<void()> render =
 					}
 					else hit_nothing = !hit_b.first;
 				}
-				if(/*likely(*/hit_nothing/*)*/) framebuf[index] = RGB(255, 255, 255);//RGB(255, 0, 0);
+				if(/*likely(*/hit_nothing/*)*/) framebuf[index] = background;//RGB(255, 0, 0);
 				else 
 				#ifndef IMAGE
 					framebuf[index] = smallest->clr;
@@ -1493,10 +1511,10 @@ std::function<void()> render =
 }
 , resize =
 [](){
-    //z = width / (2 * tan(horizontal_fov * convert_horizontal_fov_to_radians /* * 0.0175*/ / 2));
-    vertical_fov = atan(tan(height_px / 2.0) * height_px / (double)width_px);
-    height = height_px / (double)width_px;
-    pixel_inc = width / width_px;
+	//z = width / (2 * tan(horizontal_fov * convert_horizontal_fov_to_radians /* * 0.0175*/ / 2));
+	vertical_fov = atan(tan(height_px / 2.0) * height_px / (double)width_px);
+	height = height_px / (double)width_px;
+	pixel_inc = width / width_px;
 };
 #ifdef SOUND
 std::vector<std::unique_ptr<char[]>> sounds;
@@ -1508,54 +1526,54 @@ void play_sounds(void*){
 }
 #endif
 LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
-    static HDC pdc;
-    static HBITMAP old;
-    static HBITMAP bitmap;
-    switch(msg){
-        case WM_CREATE:{
-            //SetTimer(hwnd, 1, 1, 0);
-            HDC hdc;
-            BITMAPINFO bitmapinfo{};
-            hdc = CreateCompatibleDC(0);
-            bitmapinfo.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-            bitmapinfo.bmiHeader.biWidth = width_px;
-            bitmapinfo.bmiHeader.biHeight = -height_px; // top down is negative
-            bitmapinfo.bmiHeader.biPlanes = 1;
-            bitmapinfo.bmiHeader.biBitCount = 32;
-            bitmapinfo.bmiHeader.biCompression = BI_RGB;
-            bitmapinfo.bmiHeader.biClrUsed = 256;
-            bitmapinfo.bmiHeader.biClrImportant = 256;
-            bitmap = CreateDIBSection(hdc, &bitmapinfo, DIB_RGB_COLORS, (void**)&framebuf, 0, 0);
-            pdc = CreateCompatibleDC(0);
-            old = (HBITMAP)SelectObject(pdc, bitmap);
-            DeleteDC(hdc);
-            break;
-        }
-        case WM_SIZE:{
-            width_px = LOWORD(l);
-            height_px = HIWORD(l);
-            resize();
-            SelectObject(pdc, old);
-            DeleteDC(pdc);
-            DeleteObject(bitmap);
-            HDC hdc;
-            BITMAPINFO bitmapinfo{};
-            hdc = CreateCompatibleDC(0);
-            bitmapinfo.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-            bitmapinfo.bmiHeader.biWidth = width_px;
-            bitmapinfo.bmiHeader.biHeight = -height_px; // top down is negative
-            bitmapinfo.bmiHeader.biPlanes = 1;
-            bitmapinfo.bmiHeader.biBitCount = 32;
-            bitmapinfo.bmiHeader.biCompression = BI_RGB;
-            bitmapinfo.bmiHeader.biClrUsed = 256;
-            bitmapinfo.bmiHeader.biClrImportant = 256;
-            bitmap = CreateDIBSection(hdc, &bitmapinfo, DIB_RGB_COLORS, (void**)&framebuf, 0, 0);
-            pdc = CreateCompatibleDC(0);
-            old = (HBITMAP)SelectObject(pdc, bitmap);
-            DeleteDC(hdc);
-            break;
-        }
-        case WM_KEYDOWN:{
+	static HDC pdc;
+	static HBITMAP old;
+	static HBITMAP bitmap;
+	switch(msg){
+		case WM_CREATE:{
+			//SetTimer(hwnd, 1, 1, 0);
+			HDC hdc;
+			BITMAPINFO bitmapinfo{};
+			hdc = CreateCompatibleDC(0);
+			bitmapinfo.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+			bitmapinfo.bmiHeader.biWidth = width_px;
+			bitmapinfo.bmiHeader.biHeight = -height_px; // top down is negative
+			bitmapinfo.bmiHeader.biPlanes = 1;
+			bitmapinfo.bmiHeader.biBitCount = 32;
+			bitmapinfo.bmiHeader.biCompression = BI_RGB;
+			bitmapinfo.bmiHeader.biClrUsed = 256;
+			bitmapinfo.bmiHeader.biClrImportant = 256;
+			bitmap = CreateDIBSection(hdc, &bitmapinfo, DIB_RGB_COLORS, (void**)&framebuf, 0, 0);
+			pdc = CreateCompatibleDC(0);
+			old = (HBITMAP)SelectObject(pdc, bitmap);
+			DeleteDC(hdc);
+			break;
+		}
+		case WM_SIZE:{
+			width_px = LOWORD(l);
+			height_px = HIWORD(l);
+			resize();
+			SelectObject(pdc, old);
+			DeleteDC(pdc);
+			DeleteObject(bitmap);
+			HDC hdc;
+			BITMAPINFO bitmapinfo{};
+			hdc = CreateCompatibleDC(0);
+			bitmapinfo.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+			bitmapinfo.bmiHeader.biWidth = width_px;
+			bitmapinfo.bmiHeader.biHeight = -height_px; // top down is negative
+			bitmapinfo.bmiHeader.biPlanes = 1;
+			bitmapinfo.bmiHeader.biBitCount = 32;
+			bitmapinfo.bmiHeader.biCompression = BI_RGB;
+			bitmapinfo.bmiHeader.biClrUsed = 256;
+			bitmapinfo.bmiHeader.biClrImportant = 256;
+			bitmap = CreateDIBSection(hdc, &bitmapinfo, DIB_RGB_COLORS, (void**)&framebuf, 0, 0);
+			pdc = CreateCompatibleDC(0);
+			old = (HBITMAP)SelectObject(pdc, bitmap);
+			DeleteDC(hdc);
+			break;
+		}
+		case WM_KEYDOWN:{
 			#ifndef MOVEMENT_AMOUNT
 				#define MOVEMENT_AMOUNT 10
 			#endif
@@ -1602,14 +1620,14 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
 					translate_world(-camera_right.x, -(-camera_right.y), -camera_right.z);
 					break;
 			}
-        	break;
+			break;
 		}
 		case WM_LBUTTONDOWN:{
 			int x = GET_X_LPARAM(l), y = GET_Y_LPARAM(l);
-            std::vector<object_pointer> can_hit;
-            plane_array plane;
-            bool ypr;
-            plane_setup(can_hit, plane, ypr);
+			std::vector<object_pointer> can_hit;
+			plane_array plane;
+			bool ypr;
+			plane_setup(can_hit, plane, ypr);
 			vector v;
 			if(ypr){
 				vector start = plane[0][0]; //start at top left
@@ -1622,7 +1640,8 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
 			}
 			else
 				v = vector(-width / 2 + x * pixel_inc, height / 2 - y * pixel_inc, z);
-			v.normalize();
+			//v.normalize();
+			v.set_normalize();
 			object* smallest = can_hit[0];
 			/*std::pair<bool, double>*/ hit_val hit_b = smallest->hit(v);
 			bool hit_nothing = !hit_b.first;//, small_change = false;
@@ -1632,9 +1651,9 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
 				/*std::pair<bool, double>*/ hit_val hit_a = can_hit[w]->hit(v);				
 				//if(small_change) hit_b = smallest->hit(v), small_change = false;
 				
-				if(unlikely(hit_a.first)){
+				if(/*unlikely(*/hit_a.first/*)*/){
 					hit_nothing = false;
-					if(unlikely(hit_b.first)){
+					if(/*unlikely(*/hit_b.first/*)*/){
 						if(hit_a.second < hit_b.second)
 							smallest = can_hit[w], hit_b = smallest->hit(v);//small_change = true;
 					}
@@ -1642,7 +1661,7 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
 				}
 				else hit_nothing = !hit_b.first;
 			}
-			if(likely(hit_nothing)) std::cout << "you clicked the vast emptiness of space, devoid of any shred of liveliness and hope...\n";
+			if(/*likely(*/hit_nothing/*)*/) std::cout << "you clicked the vast emptiness of space, devoid of any shred of liveliness and hope...\n";
 			else{
 				#ifdef SOUND
 				//static char sound_name[256];
@@ -1666,25 +1685,25 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
 		}
 		/*
 		case WM_TIMER:
-            InvalidateRgn(hwnd, 0, 0);
-            UpdateWindow(hwnd);
-            break;
-		*/
-        case WM_PAINT:{
-            //tick_count = GetTickCount();
-            PAINTSTRUCT ps;
-            HDC h = BeginPaint(hwnd, &ps);
-            render();
-            BitBlt(h, 0, 0, width_px, height_px, pdc, 0, 0, SRCCOPY);
-            EndPaint(hwnd, &ps);
 			InvalidateRgn(hwnd, 0, 0);
-            break;
-        }
-        case WM_DESTROY:
-            SelectObject(pdc, old);
-            DeleteDC(pdc);
-            DeleteObject(bitmap);
-            //KillTimer(hwnd, 1);
+			UpdateWindow(hwnd);
+			break;
+		*/
+		case WM_PAINT:{
+			//tick_count = GetTickCount();
+			PAINTSTRUCT ps;
+			HDC h = BeginPaint(hwnd, &ps);
+			render();
+			BitBlt(h, 0, 0, width_px, height_px, pdc, 0, 0, SRCCOPY);
+			EndPaint(hwnd, &ps);
+			InvalidateRgn(hwnd, 0, 0);
+			break;
+		}
+		case WM_DESTROY:
+			SelectObject(pdc, old);
+			DeleteDC(pdc);
+			DeleteObject(bitmap);
+			//KillTimer(hwnd, 1);
 			exit(0);
 		default:
 			return DefWindowProc(hwnd, msg, w, l);
@@ -1695,8 +1714,8 @@ LRESULT CALLBACK WindowProcessMessages(HWND hwnd, UINT msg, WPARAM w, LPARAM l){
 {\
 	MSG msg{};\
 	while(GetMessage(&msg, 0, 0, 0)){\
-	    TranslateMessage(&msg);\
-	    DispatchMessage(&msg);\
+		TranslateMessage(&msg);\
+		DispatchMessage(&msg);\
 	}\
 }
 struct window{
@@ -1756,8 +1775,8 @@ int main(){
 	CreateWindow(name, name, WS_OVERLAPPEDWINDOW | WS_CAPTION | WS_SYSMENU | WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT, a, b, 0, 0, 0, 0);
 	MSG msg{};
 	while(GetMessage(&msg, 0, 0, 0)){
-	    TranslateMessage(&msg);
-	    DispatchMessage(&msg);
+		TranslateMessage(&msg);
+		DispatchMessage(&msg);
 	}
 	*/
 	window w{"ray tracer!!!", width_px, height_px, WindowProcessMessages};
